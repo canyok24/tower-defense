@@ -10,6 +10,9 @@ class Projectile(
     val slowFactor: Float,
     val slowDuration: Float,
     val color: Int,
+    /** Damage multiplier vs Boss/Tank (Heavy). */
+    val bossBonus: Float = 1f,
+    val source: TowerType = TowerType.ARROW,
 ) {
     var alive = true
     /** Last known target position, so shells still land if the target dies. */
@@ -17,7 +20,7 @@ class Projectile(
     var targetY = target.y
 }
 
-/** Short-lived visual effect (explosions, rings, floating text). */
+/** Short-lived visual effect (explosions, rings, floating text). Visual only. */
 class Effect(
     val kind: Kind,
     val x: Float,
@@ -27,7 +30,7 @@ class Effect(
     val duration: Float,
     val text: String = "",
 ) {
-    enum class Kind { RING, TEXT }
+    enum class Kind { RING, TEXT, BLAST, PULSE }
     var time = 0f
     val progress: Float get() = (time / duration).coerceIn(0f, 1f)
     val done: Boolean get() = time >= duration

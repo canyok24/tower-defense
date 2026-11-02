@@ -4,6 +4,8 @@
     <string name="menu_subtitle">Hold the line for 20 waves</string>
     <string name="play">Play</string>
     <string name="store">Store</string>
+    <string name="upgrades">Upgrades</string>
+    <string name="tokens_line">Tokens %1$d  ·  Super Tokens %2$d  ·  Prestige ×%3$.2f</string>
     <string name="settings">Settings</string>
     <string name="best_wave">Best: wave %1$d</string>
     <string name="sound">Sound effects</string>

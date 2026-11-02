@@ -15,6 +15,8 @@ import com.toasteralley.towerdefense.app
 import com.toasteralley.towerdefense.game.EnemyType
 import com.toasteralley.towerdefense.game.GameEngine
 import com.toasteralley.towerdefense.game.GameView
+import com.toasteralley.towerdefense.game.RunModifiers
+import com.toasteralley.towerdefense.game.RunResult
 import kotlinx.coroutines.launch
 
 class GameActivity : AppCompatActivity(), GameView.Listener {
@@ -39,13 +41,12 @@ class GameActivity : AppCompatActivity(), GameView.Listener {
             override fun onLifeLost() = sound.play(SoundManager.Sfx.LIFE_LOST)
             override fun onWaveStarted(wave: Int) = sound.play(SoundManager.Sfx.WAVE)
             override fun onEnemyKilled(type: EnemyType) = Unit
-            override fun onGameOver(victory: Boolean, wave: Int) {
-                val reached = if (victory) wave else wave - 1
-                runOnUiThread {
-                    if (reached > app.settings.bestWave) app.settings.bestWave = reached
-                }
-            }
+            // Called once per run (win, lose, restart or quit): persist Tokens,
+            // lifetime gold (Super Token accrual), stats and best wave.
+            override fun onRunFinished(result: RunResult) = app.progression.recordRun(result)
         }
+        // Meta upgrades + prestige multiplier apply to this run.
+        gameView.startRun(app.progression.runModifiers())
 
         val billing = app.billing
         lifecycleScope.launch {
@@ -82,6 +83,7 @@ class GameActivity : AppCompatActivity(), GameView.Listener {
     }
 
     override fun onDestroy() {
+        if (isFinishing) gameView.finishRun()
         AdManager.releaseBanner(adContainer)
         sound.release()
         super.onDestroy()
@@ -93,6 +95,9 @@ class GameActivity : AppCompatActivity(), GameView.Listener {
     }
 
     override fun onQuitToMenu() {
+        gameView.finishRun()
         finish()
     }
+
+    override fun currentModifiers(): RunModifiers = app.progression.runModifiers()
 }

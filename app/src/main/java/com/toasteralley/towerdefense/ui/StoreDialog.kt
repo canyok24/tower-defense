@@ -31,7 +31,10 @@ object StoreDialog {
         Item(BillingManager.PRODUCT_REMOVE_ADS, "Remove Ads", "Hide all banner ads forever."),
         Item(
             BillingManager.PRODUCT_PREMIUM_TOWERS, "Premium Towers",
-            "Unlock the Sniper (long range, heavy damage) and Laser (rapid beam) towers."
+            "Unlock 4 premium towers: Sniper (huge range, heavy hits), Railgun (rapid instant-hit " +
+                "rail slugs), Laser (continuous beam that branches to up to 10 enemies) and " +
+                "Annihilator (slow, enormous splash blasts). The other 7 towers are free. " +
+                "Super Tokens are earned by playing and are never sold."
         ),
     )
 

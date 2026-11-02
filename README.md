@@ -24,45 +24,131 @@ products) and a banner-ad abstraction with optional AdMob (test IDs).
 
 ## Features
 
-- **Grid map with a winding path** (16×9 tiles), entry/exit markers, scaled to any landscape screen.
-- **Tap-to-build**: pick a tower in the side panel, tap any empty grass tile. Path/occupied tiles are rejected.
-- **5 tower types** (2 premium) with cost, range, damage, fire rate, projectiles, splash and slow effects.
-- **Upgrades**: tap a placed tower → panel shows level, current → next stats, *Upgrade* (levels 1–4) and *Sell* (70% refund of everything invested). Range circle shown for the selected tower.
-- **4 enemy types** following waypoints, with HP bars, armor, slow indicator and hit flash.
+- **Grid map with a winding path** (16×9 tiles), entry/exit markers, scaled to any landscape screen. Enemies follow waypoints; lives are lost when they reach the exit.
+- **Tap-to-build**: pick a tower in the scrollable side panel (drag to scroll through all 11), tap any empty grass tile. Path/occupied tiles are rejected.
+- **11 tower types** (4 premium) with unique drawn sprites and colors: projectiles, splash, slow-on-hit, instant hits, a branching continuous laser beam, stun pulses and a screen-shaking nuke.
+- **20 in-run upgrade levels per tower** with data-driven stat curves, milestone bonuses at levels 10 and 20, steep late-game costs, bulk buy (**x5** and **Max affordable**) and **Sell** (70% of everything invested).
+- **4 enemy types** with HP bars, armor, slow and **stun** indicators, hit flash. Bosses resist stuns.
 - **Wave system**: 20 waves with increasing count, HP scaling (+14%/wave), new enemy types unlocking, boss every 5th wave. Between-wave countdown with a **Start wave** button (early-start gold bonus) and a clear bonus.
-- **Gold & lives**, floating "+gold" text, explosion rings, laser beams.
-- **Pause** menu (Resume / Restart / Main menu), **1x/2x speed**, auto-pause when the app is backgrounded, Back button opens pause.
-- **Game over** and **Victory** screens; best wave saved.
-- **Main menu**, **Game** and **Settings** activities (sound toggle, restore purchases, reset best score).
+- **Game speed 1x–10x, 12x, 14x**: tap the speed button to cycle, or ▾ for a popup list. Fixed 1/60 s simulation steps (see *Game speed*).
+- **Tokens (meta progression)**: earned at the end of every run, spent on permanent global upgrades on the **Upgrades** screen.
+- **Super Tokens (prestige)**: accrue automatically from lifetime gold; spend them to reset progression for a permanent damage multiplier. Not a purchase.
+- **Pause** menu (Resume / Restart / Main menu), auto-pause when the app is backgrounded, Back button opens pause.
+- **Game over** and **Victory** screens showing Tokens earned; best wave saved.
+- **Main menu**, **Game**, **Upgrades** and **Settings** activities (sound toggle, restore purchases, reset best score).
 - **Google Play Billing Library 8** (`BillingManager`): connection with auto service reconnection plus exponential back-off reconnect, product-details query, purchase flow, acknowledgement, restore on startup and on resume, revoke on refund, pending-purchase handling, entitlements persisted in SharedPreferences and exposed as `StateFlow`.
 - **Store dialog** (from main menu and in-game HUD) with live localized prices, Owned state, Restore button, the Play Console note, and debug-only local grants.
 - **Ads**: `AdManager` facade with a `BannerAdProvider` abstraction — AdMob banner (Google's official test IDs) or a plain placeholder view. Banner is removed and hidden when `remove_ads` is owned.
 - **Sound effects** via `ToneGenerator` (no asset files), honoring the settings toggle.
 - Adaptive launcher icon (vector foreground + monochrome) plus PNG fallbacks for API 24–25.
-- JVM unit tests for the game engine.
+- JVM unit tests for the engine, tower mechanics, costs, speed determinism and progression.
 
 ### Towers
 
-| Tower  | Cost | Range | Damage | Rate (/s) | Special | Premium |
-|--------|-----:|------:|-------:|----------:|---------|:-------:|
-| Arrow  | 50   | 2.6   | 10     | 1.4       | fast single-target projectile | |
-| Cannon | 100  | 2.3   | 26     | 0.6       | splash radius 1.1 | |
-| Frost  | 80   | 2.2   | 4      | 1.0       | small splash, slows 50% for 1.6 s | |
-| Sniper | 150  | 5.5   | 70     | 0.4       | very long range, fast shot | ✔ |
-| Laser  | 200  | 3.0   | 7      | 6.0       | instant-hit beam | ✔ |
+Level-1 stats (Laser damage is damage per second). Premium towers need the `unlock_premium_towers` purchase.
 
-Each upgrade level: damage ×1.45, range +12% of base, fire rate ×1.15. Upgrade cost = `cost × 0.75 × currentLevel`. Max level 4.
+| Tower | Cost | Role | Range | Damage | Rate (/s) | Special | Premium |
+|-------|-----:|------|------:|-------:|----------:|---------|:-------:|
+| Arrow | 50 | Starter | 2.6 | 10 | 1.4 | fast single-target projectile | |
+| Cannon | 100 | Splash | 2.3 | 26 | 0.6 | splash radius 1.1 | |
+| Frost | 80 | Area slow | 2.2 | 4 | 1.0 | small splash, slows 50% for 1.6 s | |
+| Slow | 90 | Slow on hit | 2.5 | 14 | 0.8 | slow-moving goo shot (2.6 tiles/s), single target, slows 35% for 2.5 s | |
+| Rapid | 120 | Swarm | 2.2 | 3 | 8.0 | very high fire rate, tiny bullets | |
+| Heavy | 175 | Boss killer | 2.4 | 85 | 0.35 | ×1.5 damage vs Boss and Tank | |
+| Disruptor | 140 | Stun | 2.0 | 0 | 1 pulse / 4 s | stuns every enemy in range for 0.5 s (Boss ×0.35, Tank ×0.75 duration) | |
+| Sniper | 150 | Long range | 5.5 | 70 | 0.4 | very long range, fast shot | ✔ |
+| Railgun | 200 | Instant hit | 3.0 | 7 | 6.0 | instant-hit rail slugs (formerly "Laser") | ✔ |
+| Laser | 250 | Chain beam | 2.8 | 22 DPS | continuous | beam hits the lead enemy; branches (30% damage) jump to up to 2 more nearby enemies; up to 10 targets with upgrades | ✔ |
+| Annihilator | 400 | Nuke | 3.2 | 600 | 0.28 (3.6 s) | splash radius 1.6, big blast + screen shake | ✔ |
+
+Notes:
+
+- **Stun**: a stunned enemy stops moving (orbiting yellow sparks). After a stun ends the enemy is immune for 0.5 s so stacked Disruptors can't lock it forever. Disruptors only pulse when an enemy is in range.
+- **Laser**: no projectiles; the beam is drawn every frame. The main beam (thick, bright) deals full DPS to the lead enemy; thinner, dimmer branch beams jump from it to the nearest enemies within 2.2 tiles (and within tower range). Beams ignore armor. Hard cap: 10 targets.
+- **Heavy** bonus multiplies damage before armor.
+
+### In-run upgrades (levels 1–20)
+
+All curves live in `game/TowerStats.kt` (`TowerStats.of(type, level, modifiers)`).
+
+| Stat | Per level | Level 10 milestone | Level 20 milestone | Clamp |
+|------|-----------|--------------------|--------------------|-------|
+| Damage | ×1.12 (Annihilator ×1.10) | ×1.25 | ×1.40 | — |
+| Fire rate | +3% of base | ×1.10 | ×1.15 | ≤ 2.5× base, ≤ 16/s |
+| Range | +2.5% of base | +8% | +10% | ≤ 1.7× base, ≤ 8 tiles |
+| Splash radius | +2% of base | +10% | +15% | ≤ 1.7× base |
+| Slow factor | −0.01 | −0.05 | −0.05 | ≥ 0.30 (max 70% slow) |
+| Slow duration | +3% | ×1.1 | ×1.1 | ≤ 2× base |
+| Stun duration | +0.03 s | +0.1 s | +0.2 s | ≤ 1.5 s |
+| Stun cooldown | −0.08 s | −0.3 s | −0.4 s | ≥ 1.8 s |
+| Laser targets | +1 every 3 levels | +1 | +2 | ≤ 10 |
+| Laser branch damage | +0.5% | +2% | +3% | ≤ 40% |
+| Heavy boss bonus | +0.025 | +0.15 | +0.25 | ≤ ×2.5 |
+
+**Annihilator fire rate**: levels 1–13 stay slow (3.57 s → 3.03 s per shot), then ramp geometrically (~×1.29 per level) over 14–20 to **0.50 s per shot** at level 20 while damage keeps rising (600 → 2354 at L13 → 6422 at L20).
+
+**Upgrade cost** to reach level N (`game/TowerStats.kt`, `UpgradeCosts`): level 2 costs the tower's `upgradeBase`; levels 3–12 are ×1.13 per level; then versus the previous level: L13 ×3, L14 ×3, L15 ×1.2, L16 ×1.2, L17 ×1.2, L18 ×3, L19 ×1.2, L20 ×1.2. The exact value is rounded to a nice number (<100: nearest 5, <1000: nearest 10, <10000: nearest 50, else nearest 100).
+
+Example — Arrow (`upgradeBase` 30):
+
+| Level | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Cost | 30 | 35 | 40 | 45 | 50 | 55 | 60 | 70 | 80 | 90 | 100 | 310 | 920 | 1100 | 1300 | 1600 | 4750 | 5700 | 6850 |
+
+`upgradeBase` per tower: Arrow 30, Cannon 60, Frost 50, Slow 55, Rapid 70, Heavy 100, Disruptor 80, Sniper 90, Railgun 120, Laser 150, Annihilator 240.
+
+The upgrade panel shows **Level X/20**, current → next stats, the next cost, **x5** (sum of the next five costs, fewer near the cap) and **Max +N** (the most levels current gold can buy in a row, with their exact summed cost). **Sell** refunds 70% of the total invested (build + all upgrades).
+
+### Game speed
+
+Speeds: **1x, 2x … 10x, 12x, 14x** (tap the speed button to cycle, ▾ to pick from a list). The simulation always advances in fixed **1/60 s** steps: each frame adds `realDt × speed` to an accumulator and runs that many whole steps, so N× speed = N normal steps per frame, never a bigger dt (a unit test checks N steps at 1x equal one frame at Nx bit-for-bit). At most **16 steps per frame** run; extra time is dropped, so a slow device simply runs below the selected speed instead of losing accuracy. At **≥10x** visual-only effects are reduced: at most 24 particles/explosions, no floating gold text, no hit flash, no screen flash or shake.
+
+### Tokens (meta progression)
+
+Earned at the end of **every run** (victory, defeat, restart or quitting to the menu): `2 × waves cleared + kills / 20 + 5 × bosses killed (+20 for victory)` — a full 20-wave win is about 147 Tokens. Shown on the game-over/victory screen and persisted in SharedPreferences (`meta_progress`).
+
+Spend them on the **Upgrades** screen (main menu) — permanent, global, applied to all towers in future runs, multiplied on top of tower level stats:
+
+| Upgrade | Levels | Per level | Max | Cost per level (Tokens) |
+|---------|------:|-----------|-----|-------------------------|
+| Damage | 14 | +2.5% | +35% | 20, 25, 35, 45, 55, 75, 95, 130, 160, 210, 280, 360, 470, 610 |
+| Attack Speed | 10 | +2.5% | +25% | 25, 35, 45, 55, 75, 100, 130, 170, 230, 300 |
+| Range | 10 | +2% | +20% | 15, 20, 25, 35, 45, 55, 70, 95, 120, 160 |
+| Starting Gold | 12 | +15 gold | +180 | 10, 15, 15, 20, 25, 35, 45, 55, 70, 90, 120, 150 |
+| Health (starting lives) | 10 | +1 | +10 | 15, 20, 25, 35, 45, 55, 70, 95, 120, 160 |
+| Effect Power (slow/stun duration, splash radius) | 10 | +3% | +30% | 15, 20, 25, 35, 45, 55, 70, 95, 120, 160 |
+| Gold per Kill (kills only; wave rewards unchanged) | 10 | +2% | +20% | 25, 35, 45, 55, 75, 100, 130, 170, 230, 300 |
+
+Cost of level L+1 = `niceRound(baseCost × growth^L)` (growth 1.28–1.32).
+
+### Super Tokens (prestige)
+
+Super Tokens are **never sold** (no billing products) and have no milestone rewards — they accrue automatically from **lifetime gold earned across all runs combined** (kills, wave clears and early-start bonuses; not sell refunds):
+
+```
+superTokensEarned    = floor( sqrt( lifetimeGold / 4000 ) )   # n-th token needs 4000·n² gold
+superTokensAvailable = superTokensEarned − superTokensSpent
+prestigeMultiplier   = 1 + 0.1 × superTokensSpent^0.8         # 1→×1.10, 3→×1.24, 10→×1.63, 50→×3.29
+```
+
+The Upgrades screen shows available/earned/spent Super Tokens, a progress bar to the next one, and the current prestige multiplier (also shown in the in-game HUD). **Reset (Prestige)** opens a confirmation dialog (with a slider to spend all or a chosen amount) explaining what is wiped:
+
+- **Wiped**: Tokens, every meta upgrade level, best wave and run stats.
+- **Kept**: purchases/entitlements (`remove_ads`, `unlock_premium_towers`), settings, the prestige multiplier, total Super Tokens spent, unspent Super Tokens.
+- **Lifetime gold**: the counter is not zeroed (that would let the cheap first tokens be earned again); spent tokens are subtracted instead, so each Super Token can only be earned once and gold keeps counting toward the next one.
+
+The prestige multiplier multiplies every tower's damage (on top of level stats and meta Damage).
 
 ### Enemies
 
-| Enemy  | Base HP | Speed (tiles/s) | Armor | Gold | Lives lost |
-|--------|--------:|----------------:|------:|-----:|-----------:|
-| Grunt (normal) | 40   | 1.25 | 0 | 5   | 1  |
-| Runner (fast)  | 24   | 2.5  | 0 | 6   | 1  |
-| Tank           | 170  | 0.7  | 3 | 14  | 2  |
-| Boss           | 1400 | 0.5  | 6 | 120 | 10 |
+| Enemy  | Base HP | Speed (tiles/s) | Armor | Gold | Lives lost | Stun taken |
+|--------|--------:|----------------:|------:|-----:|-----------:|-----------:|
+| Grunt (normal) | 40   | 1.25 | 0 | 5   | 1  | 100% |
+| Runner (fast)  | 24   | 2.5  | 0 | 6   | 1  | 100% |
+| Tank           | 170  | 0.7  | 3 | 14  | 2  | 75% |
+| Boss           | 1400 | 0.5  | 6 | 120 | 10 | 35% |
 
-Armor is subtracted from each hit (minimum 1 damage).
+Armor is subtracted from each hit (minimum 1 damage); laser beams ignore armor.
 
 ---
 
@@ -85,16 +171,20 @@ tower-defense/
 │       │   ├── AndroidManifest.xml
 │       │   ├── java/com/toasteralley/towerdefense/
 │       │   │   ├── TowerDefenseApp.kt     # Application: billing + ads init
-│       │   │   ├── SettingsStore.kt       # sound toggle, best wave
+│       │   │   ├── SettingsStore.kt       # sound toggle
 │       │   │   ├── SoundManager.kt        # ToneGenerator SFX
 │       │   │   ├── game/
 │       │   │   │   ├── GameView.kt        # SurfaceView loop, rendering, input, HUD/panels
 │       │   │   │   ├── GameEngine.kt      # simulation: waves, combat, gold, lives
 │       │   │   │   ├── GameMap.kt         # grid + path waypoints
 │       │   │   │   ├── TowerType.kt / Tower.kt
+│       │   │   │   ├── TowerStats.kt      # level curves (1-20), clamps, UpgradeCosts, RunModifiers
 │       │   │   │   ├── EnemyType.kt / Enemy.kt
 │       │   │   │   ├── Projectile.kt      # projectiles + visual effects
 │       │   │   │   └── WaveDefinitions.kt # wave composition & difficulty curve
+│       │   │   ├── meta/
+│       │   │   │   ├── Progression.kt     # Tokens, MetaUpgrade, Super Tokens, prestige
+│       │   │   │   └── KeyValueStore.kt   # SharedPreferences / in-memory store
 │       │   │   ├── billing/
 │       │   │   │   ├── BillingManager.kt  # Play Billing wrapper
 │       │   │   │   └── EntitlementStore.kt
@@ -102,11 +192,13 @@ tower-defense/
 │       │   │   └── ui/
 │       │   │       ├── MainMenuActivity.kt
 │       │   │       ├── GameActivity.kt
+│       │   │       ├── UpgradesActivity.kt  # Tokens shop + prestige
 │       │   │       ├── SettingsActivity.kt
 │       │   │       ├── StoreDialog.kt
 │       │   │       └── Insets.kt          # immersive mode helper
 │       │   └── res/ (layouts, vector drawables, adaptive icon, themes, xml backup rules)
-│       └── test/…/GameEngineTest.kt
+│       └── test/…/ (GameEngineTest, TowerMechanicsTest, UpgradeCostTest,
+│                     SimulationSpeedTest, meta/ProgressionTest)
 ├── README.md
 └── LICENSE
 ```
@@ -126,7 +218,7 @@ tower-defense/
 2. Create/start an emulator (API 24+, a "Google Play" system image if you want Billing to connect) or plug in a device with USB debugging.
 3. Press **Run ▶** (configuration `app`). The game runs in landscape.
 
-How to play: tap a tower on the right panel, then tap a grass tile. Tap a placed tower to upgrade/sell. Press **Start wave** (or wait for the countdown). **II** pauses, **1x/2x** toggles speed, **Store** opens the shop.
+How to play: tap a tower on the right panel (drag to scroll), then tap a grass tile. Tap a placed tower to upgrade (+1 / x5 / Max) or sell. Press **Start wave** (or wait for the countdown). **II** pauses, the speed button cycles 1x…14x (▾ opens the list), **Store** opens the shop. After a run, spend Tokens in **Upgrades** on the main menu.
 
 ## Build from the command line
 
@@ -241,14 +333,15 @@ Never click your own live ads; register test devices in AdMob. For EEA/UK users 
 2. On connect: `queryProductDetailsAsync()` for both INAPP products — PBL 8 returns a `QueryProductDetailsResult` whose `unfetchedProductList` is logged (usually means the product isn't created/active in Play Console) — then `restorePurchases()` via `queryPurchasesAsync` (PBL 8 removed `queryPurchaseHistory`; it's not used).
 3. `launchPurchase(activity, productId)` opens the Play purchase sheet.
 4. `onPurchasesUpdated` / restore → `processPurchases`: grants entitlement for `PURCHASED`, **acknowledges** unacknowledged purchases (Play auto-refunds unacknowledged purchases after 3 days), reports `PENDING`. A full restore also revokes refunded items.
-5. Entitlements are saved to SharedPreferences (instant offline startup) and published as `StateFlow<Entitlements>`; `GameActivity` unlocks Sniper/Laser and `AdManager` hides the banner reactively.
+5. Entitlements are saved to SharedPreferences (instant offline startup) and published as `StateFlow<Entitlements>`; `GameActivity` unlocks Sniper/Railgun/Laser/Annihilator and `AdManager` hides the banner reactively.
 6. Purchases are re-checked in `MainMenuActivity.onResume()`.
 
 For production, verify purchase tokens server-side with the Google Play Developer API before granting (marked `TODO(production)` in code). Test with license testers and Play's test cards, including the "slow test card" for pending purchases.
 
 ## Customizing towers and waves
 
-- **Towers** – `game/TowerType.kt`: each enum entry has `cost`, `range` (tiles), `damage`, `fireRate` (shots/s), `projectileSpeed` (0 = instant beam), `splashRadius`, `slowFactor`/`slowDuration`, `premium`, `color`. Add an entry and it automatically appears in the build panel; add a `when` branch in `GameView.drawTowerShape` for a custom look. Upgrade curve/max level/refund rate: constants in `Tower.kt`'s companion object.
+- **Towers** – `game/TowerType.kt`: each enum entry has `cost`, `range` (tiles), `damage`, `fireRate` (shots/s), `projectileSpeed`, `attack` (PROJECTILE / INSTANT / BEAM / PULSE), `splashRadius`, `slowFactor`/`slowDuration`, `stunDuration`/`stunCooldown`, `beamTargets`/`beamSecondary`, `bossBonus`, `upgradeBase`, `premium`, `color`, `role`. Add an entry and it automatically appears in the build panel; add a `when` branch in `GameView.drawTowerShape` for a custom look. Level curves, milestones, clamps and max level: `game/TowerStats.kt`; upgrade cost multipliers: `UpgradeCosts`; refund rate: `Tower.SELL_REFUND`.
+- **Meta / prestige** – `meta/Progression.kt`: Token award constants, `MetaUpgrade` levels/costs, `SUPER_TOKEN_GOLD_K` and the prestige formula.
 - **Enemies** – `game/EnemyType.kt`: `baseHp`, `speed`, `reward`, `damageToBase`, `radius`, `color`, `armor`. Render shape in `GameView.drawEnemies`.
 - **Waves** – `game/WaveDefinitions.kt`: `TOTAL_WAVES`, countdowns, starting gold/lives, `hpMultiplier(wave)`, `clearBonus(wave)` and `build(wave)` which returns the ordered spawn list (`SpawnEntry(type, delayBeforeSpawn)`). Replace `build` with a hand-authored table for fully scripted waves.
 - **Map** – `game/GameMap.kt`: `GameMap.default()` lists path waypoints in grid coordinates (segments must be horizontal or vertical; first/last waypoints may sit just outside the grid). `COLS`/`ROWS` set the grid size.

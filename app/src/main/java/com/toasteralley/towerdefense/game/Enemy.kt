@@ -15,9 +15,18 @@ class Enemy(val type: EnemyType, val maxHp: Float, startX: Float, startY: Float)
     var progress = 0f
     private var slowTimer = 0f
     private var slowFactor = 1f
+    /** Remaining stun time; a stunned enemy does not move. */
+    var stunTimer = 0f
+        private set
+    /** Short immunity after a stun ends so stacked Disruptors can't stun-lock forever. */
+    var stunImmunity = 0f
+        private set
+    /** Visual only. */
     var hitFlash = 0f
 
     val isSlowed: Boolean get() = slowTimer > 0f
+    val isStunned: Boolean get() = stunTimer > 0f
+    val currentSlowFactor: Float get() = if (isSlowed) slowFactor else 1f
 
     fun applySlow(factor: Float, duration: Float) {
         if (factor >= 1f || duration <= 0f) return
@@ -26,11 +35,26 @@ class Enemy(val type: EnemyType, val maxHp: Float, startX: Float, startY: Float)
         slowTimer = max(slowTimer, duration)
     }
 
-    /** Returns true if the enemy was killed by this hit. */
-    fun takeDamage(amount: Float): Boolean {
+    /**
+     * Stuns for [duration] seconds scaled by the enemy's [EnemyType.stunMultiplier]
+     * (bosses are stunned for a fraction of the time). Never shortens a stun.
+     */
+    fun applyStun(duration: Float) {
+        if (!alive || duration <= 0f || stunImmunity > 0f) return
+        stunTimer = max(stunTimer, duration * type.stunMultiplier)
+    }
+
+    /** Returns true if the enemy was killed by this hit. Armor applies (min 1). */
+    fun takeDamage(amount: Float, flash: Boolean = true): Boolean =
+        applyRawDamage(max(1f, amount - type.armor), flash)
+
+    /** Damage-over-time (beams): armor is ignored and there is no minimum. */
+    fun takeDotDamage(amount: Float, flash: Boolean = false): Boolean = applyRawDamage(amount, flash)
+
+    private fun applyRawDamage(amount: Float, flash: Boolean): Boolean {
         if (!alive) return false
-        hp -= max(1f, amount - type.armor)
-        hitFlash = 0.08f
+        hp -= amount
+        if (flash) hitFlash = 0.08f
         if (hp <= 0f) {
             hp = 0f
             alive = false
@@ -45,6 +69,12 @@ class Enemy(val type: EnemyType, val maxHp: Float, startX: Float, startY: Float)
         if (slowTimer > 0f) {
             slowTimer -= dt
             if (slowTimer <= 0f) slowFactor = 1f
+        }
+        if (stunImmunity > 0f) stunImmunity -= dt
+        if (stunTimer > 0f) {
+            stunTimer -= dt
+            if (stunTimer <= 0f) { stunTimer = 0f; stunImmunity = STUN_IMMUNITY }
+            return
         }
         var remaining = type.speed * slowFactor * dt
         while (remaining > 0f && nextWaypoint < waypoints.size) {
@@ -66,5 +96,9 @@ class Enemy(val type: EnemyType, val maxHp: Float, startX: Float, startY: Float)
             }
         }
         if (nextWaypoint >= waypoints.size) reachedEnd = true
+    }
+
+    companion object {
+        const val STUN_IMMUNITY = 0.5f
     }
 }
