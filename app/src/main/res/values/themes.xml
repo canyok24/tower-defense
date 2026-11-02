@@ -1,5 +1,5 @@
 <resources>
-    <style name="Theme.TowerDefense" parent="Theme.Material3.Dark.NoActionBar">
+    <style name="Theme.LastWall" parent="Theme.Material3.Dark.NoActionBar">
         <item name="colorPrimary">@color/primary</item>
         <item name="colorSecondary">@color/accent</item>
         <item name="android:windowBackground">@color/bg_dark</item>

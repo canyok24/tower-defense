@@ -20,5 +20,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "TowerDefense"
+rootProject.name = "The Last Wall"
 include(":app")

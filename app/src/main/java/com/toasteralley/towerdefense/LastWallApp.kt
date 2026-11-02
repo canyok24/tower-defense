@@ -8,7 +8,8 @@ import com.toasteralley.towerdefense.billing.EntitlementStore
 import com.toasteralley.towerdefense.meta.PrefsKeyValueStore
 import com.toasteralley.towerdefense.meta.Progression
 
-class TowerDefenseApp : Application() {
+/** Application class for The Last Wall: settings, meta progression, billing and ads. */
+class LastWallApp : Application() {
     lateinit var settings: SettingsStore
         private set
     lateinit var billing: BillingManager
@@ -40,4 +41,4 @@ class TowerDefenseApp : Application() {
     }
 }
 
-val Context.app: TowerDefenseApp get() = applicationContext as TowerDefenseApp
+val Context.app: LastWallApp get() = applicationContext as LastWallApp
