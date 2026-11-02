@@ -3,8 +3,23 @@ package com.toasteralley.towerdefense.game
 import kotlin.math.max
 import kotlin.math.sqrt
 
-class Enemy(val type: EnemyType, val maxHp: Float, startX: Float, startY: Float) {
-    var hp = maxHp
+/**
+ * [maxHp] is a Double: endless waves reach HP values where Float would
+ * silently drop small hits. [bounty] is the base kill gold; [speedMult] the
+ * wave's speed scaling.
+ */
+class Enemy(
+    val type: EnemyType,
+    val maxHp: Double,
+    startX: Float,
+    startY: Float,
+    val speedMult: Float = 1f,
+    val bounty: Long = type.reward.toLong(),
+) {
+    constructor(type: EnemyType, maxHp: Float, startX: Float, startY: Float) :
+        this(type, maxHp.toDouble(), startX, startY)
+
+    var hp: Double = maxHp
     var x = startX
     var y = startY
     /** Index of the waypoint the enemy is currently walking towards. */
@@ -53,10 +68,10 @@ class Enemy(val type: EnemyType, val maxHp: Float, startX: Float, startY: Float)
 
     private fun applyRawDamage(amount: Float, flash: Boolean): Boolean {
         if (!alive) return false
-        hp -= amount
+        hp -= amount.toDouble()
         if (flash) hitFlash = 0.08f
-        if (hp <= 0f) {
-            hp = 0f
+        if (hp <= 0.0) {
+            hp = 0.0
             alive = false
             return true
         }
@@ -76,7 +91,7 @@ class Enemy(val type: EnemyType, val maxHp: Float, startX: Float, startY: Float)
             if (stunTimer <= 0f) { stunTimer = 0f; stunImmunity = STUN_IMMUNITY }
             return
         }
-        var remaining = type.speed * slowFactor * dt
+        var remaining = type.speed * speedMult * slowFactor * dt
         while (remaining > 0f && nextWaypoint < waypoints.size) {
             val wp = waypoints[nextWaypoint]
             val dx = wp.x - x

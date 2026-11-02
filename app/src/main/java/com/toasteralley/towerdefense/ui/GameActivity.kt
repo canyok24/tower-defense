@@ -40,6 +40,7 @@ class GameActivity : AppCompatActivity(), GameView.Listener {
             override fun onTowerSold() = sound.play(SoundManager.Sfx.SELL)
             override fun onLifeLost() = sound.play(SoundManager.Sfx.LIFE_LOST)
             override fun onWaveStarted(wave: Int) = sound.play(SoundManager.Sfx.WAVE)
+            override fun onMilestone(wave: Int) = sound.play(SoundManager.Sfx.UPGRADE)
             override fun onEnemyKilled(type: EnemyType) = Unit
             // Called once per run (win, lose, restart or quit): persist Tokens,
             // lifetime gold (Super Token accrual), stats and best wave.

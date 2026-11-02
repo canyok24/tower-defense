@@ -18,7 +18,7 @@ import kotlin.math.pow
 
 class ProgressionTest {
 
-    private fun run(tokens: Int = 0, gold: Int = 0, waves: Int = 0) =
+    private fun run(tokens: Int = 0, gold: Long = 0, waves: Int = 0) =
         RunResult(victory = false, wavesCleared = waves, kills = 0, bossKills = 0, goldEarned = gold, tokens = tokens)
 
     // ------------------------------------------------------------ Tokens
@@ -98,7 +98,7 @@ class ProgressionTest {
         assertEquals(TowerType.ARROW.damage * 1.35f, tower.damage, 1e-3f)
         assertEquals(TowerType.ARROW.fireRate * 1.25f, tower.fireRate, 1e-3f)
         val engine = GameEngine(modifiers = m)
-        assertEquals(WaveDefinitions.STARTING_GOLD + 180, engine.gold)
+        assertEquals(WaveDefinitions.STARTING_GOLD + 180L, engine.gold)
         assertEquals(WaveDefinitions.STARTING_LIVES + 10, engine.lives)
     }
 
@@ -124,13 +124,13 @@ class ProgressionTest {
 
         val p = Progression(MapKeyValueStore())
         // Many small runs add up (lifetime gold is cumulative).
-        repeat(8) { p.recordRun(run(gold = (k / 2).toInt())) }
+        repeat(8) { p.recordRun(run(gold = k / 2)) }
         assertEquals(4 * k, p.lifetimeGold)
         assertEquals(2, p.superTokensEarned)
         assertEquals(2, p.superTokensAvailable)
         assertEquals(9 * k, p.goldForNextSuperToken)
         assertEquals(0f, p.superTokenProgress, 1e-6f)
-        p.recordRun(run(gold = (k * 5 / 2).toInt()))
+        p.recordRun(run(gold = k * 5 / 2))
         assertEquals(0.5f, p.superTokenProgress, 1e-6f)
     }
 
@@ -146,7 +146,7 @@ class ProgressionTest {
 
         val k = Progression.SUPER_TOKEN_GOLD_K
         val p = Progression(store)
-        p.recordRun(run(tokens = 5_000, gold = (9 * k).toInt(), waves = 15))
+        p.recordRun(run(tokens = 5_000, gold = 9 * k, waves = 15))
         MetaUpgrade.entries.forEach { p.buy(it); p.buy(it) }
         assertEquals(3, p.superTokensAvailable)
         assertTrue(p.level(MetaUpgrade.DAMAGE) > 0)
@@ -175,7 +175,7 @@ class ProgressionTest {
         assertTrue(damageBefore > 0f)
         // No double earning: the 3 spent tokens can't come back...
         assertEquals(0, p.superTokensAvailable)
-        p.recordRun(run(gold = (7 * k - 1).toInt()))
+        p.recordRun(run(gold = 7 * k - 1))
         assertEquals(0, p.superTokensAvailable)
         // ...but progress continues toward the 4th (16k lifetime).
         p.recordRun(run(gold = 1))
@@ -185,7 +185,7 @@ class ProgressionTest {
     @Test
     fun partialPrestigeKeepsTheRest() {
         val p = Progression(MapKeyValueStore())
-        p.recordRun(run(gold = (25 * Progression.SUPER_TOKEN_GOLD_K).toInt()))
+        p.recordRun(run(gold = 25 * Progression.SUPER_TOKEN_GOLD_K))
         assertEquals(5, p.superTokensAvailable)
         assertTrue(p.prestige(2))
         assertEquals(3, p.superTokensAvailable)
@@ -197,5 +197,111 @@ class ProgressionTest {
         val d1 = Progression.prestigeMultiplierFor(1) - Progression.prestigeMultiplierFor(0)
         val d10 = Progression.prestigeMultiplierFor(10) - Progression.prestigeMultiplierFor(9)
         assertTrue(d10 < d1)
+    }
+
+    // ------------------------------------------------------------ prestige allocation
+
+    @Test
+    fun prestigeAllocatesAcrossThreeCategoriesTrackedSeparately() {
+        val store = MapKeyValueStore()
+        val entitlements = EntitlementStore(store)
+        entitlements.savePurchased(Entitlements(removeAds = true, premiumTowers = false))
+        val k = Progression.SUPER_TOKEN_GOLD_K
+        val p = Progression(store)
+        p.recordRun(run(tokens = 500, gold = 100 * k)) // 10 Super Tokens
+        assertEquals(10, p.superTokensAvailable)
+
+        assertFalse(p.prestige(PrestigeAllocation(5, 4, 2)))   // 11 > 10
+        assertFalse(p.prestige(PrestigeAllocation(0, 0, 0)))
+        assertFalse(p.prestige(PrestigeAllocation(-1, 5, 0)))
+        assertEquals(500, p.tokens) // nothing changed
+
+        assertTrue(p.prestige(PrestigeAllocation(damage = 4, killGold = 3, waveGold = 2)))
+        assertEquals(4, p.spent(PrestigeUpgrade.DAMAGE))
+        assertEquals(3, p.spent(PrestigeUpgrade.KILL_GOLD))
+        assertEquals(2, p.spent(PrestigeUpgrade.WAVE_GOLD))
+        assertEquals(9, p.superTokensSpent)
+        assertEquals(1, p.superTokensAvailable)
+        assertEquals(0, p.tokens)
+        assertEquals(Entitlements(removeAds = true, premiumTowers = false), entitlements.loadPurchased())
+
+        assertEquals(1f + 0.1f * 4.0.pow(0.8).toFloat(), p.prestigeMultiplier, 1e-5f)
+        assertEquals(1f + 0.05f * 3.0.pow(0.7).toFloat(), p.prestigeKillGoldMultiplier, 1e-5f)
+        assertEquals(1f + 0.05f * 2.0.pow(0.7).toFloat(), p.prestigeWaveGoldMultiplier, 1e-5f)
+        val m = Progression(store).runModifiers()
+        assertEquals(p.prestigeMultiplier, m.prestigeMult, 1e-6f)
+        assertEquals(p.prestigeKillGoldMultiplier, m.prestigeKillGoldMult, 1e-6f)
+        assertEquals(p.prestigeWaveGoldMultiplier, m.prestigeWaveGoldMult, 1e-6f)
+
+        // A second prestige adds to the existing per-category totals.
+        assertTrue(p.prestige(PrestigeAllocation(waveGold = 1)))
+        assertEquals(3, Progression(store).spent(PrestigeUpgrade.WAVE_GOLD))
+        assertEquals(4, Progression(store).spent(PrestigeUpgrade.DAMAGE))
+    }
+
+    @Test
+    fun goldPrestigeGrowsSlowerThanDamageAndIsCapped() {
+        for (n in 1..500) {
+            val dmg = PrestigeUpgrade.DAMAGE.multiplier(n)
+            val kill = PrestigeUpgrade.KILL_GOLD.multiplier(n)
+            val wave = PrestigeUpgrade.WAVE_GOLD.multiplier(n)
+            assertTrue(kill < dmg && wave < dmg)
+            assertTrue(kill <= Progression.KILL_GOLD_CAP && wave <= Progression.WAVE_GOLD_CAP)
+            assertTrue(kill >= PrestigeUpgrade.KILL_GOLD.multiplier(n - 1))
+        }
+        assertEquals(2.5f, PrestigeUpgrade.KILL_GOLD.multiplier(1_000_000), 0f)
+        assertEquals(2.0f, PrestigeUpgrade.WAVE_GOLD.multiplier(1_000_000), 0f)
+        assertTrue(PrestigeUpgrade.DAMAGE.multiplier(1_000_000) > 100f) // damage uncapped
+        // Diminishing returns.
+        val d1 = PrestigeUpgrade.KILL_GOLD.multiplier(1) - PrestigeUpgrade.KILL_GOLD.multiplier(0)
+        val d20 = PrestigeUpgrade.KILL_GOLD.multiplier(20) - PrestigeUpgrade.KILL_GOLD.multiplier(19)
+        assertTrue(d20 < d1)
+    }
+
+    @Test
+    fun legacySpentMigratesIntoDamage() {
+        val store = MapKeyValueStore()
+        store.putInt("super_tokens_spent", 4)
+        store.putLong("lifetime_gold", 25 * Progression.SUPER_TOKEN_GOLD_K)
+        val p = Progression(store)
+        assertEquals(4, p.spent(PrestigeUpgrade.DAMAGE))
+        assertEquals(0, p.spent(PrestigeUpgrade.KILL_GOLD))
+        assertEquals(0, p.spent(PrestigeUpgrade.WAVE_GOLD))
+        assertEquals(1, p.superTokensAvailable)
+        assertEquals(Progression.prestigeMultiplierFor(4), p.prestigeMultiplier, 0f)
+        // Migration runs once: later spending isn't overwritten by the legacy value.
+        assertTrue(p.prestige(PrestigeAllocation(damage = 1)))
+        assertEquals(5, Progression(store).spent(PrestigeUpgrade.DAMAGE))
+    }
+
+    // ------------------------------------------------------------ endless Tokens / best wave
+
+    @Test
+    fun tokensAreSublinearForEndlessRuns() {
+        // A plain 20-wave victory pays exactly what it used to.
+        assertEquals(147, Progression.tokensForRun(20, 942, 8, true))
+        var prev = -1
+        for (w in listOf(0, 10, 20, 50, 100, 500, 1000, 10_000)) {
+            val t = Progression.tokensForRun(w, w * 140, w / 5 * 6, w >= 20)
+            assertTrue(t > prev); prev = t
+        }
+        for (w in listOf(100, 1000, 10_000)) {
+            assertTrue(Progression.tokensForRun(2 * w, 0, 0, true) < 2 * Progression.tokensForRun(w, 0, 0, true))
+        }
+        val huge = Progression.tokensForRun(Int.MAX_VALUE, Int.MAX_VALUE, Int.MAX_VALUE, true)
+        assertTrue(huge in 1..5000)
+    }
+
+    @Test
+    fun bestWaveIsUnboundedAndLifetimeGoldSaturates() {
+        val store = MapKeyValueStore()
+        val p = Progression(store)
+        p.recordRun(run(waves = 12_345))
+        assertEquals(12_345, p.bestWave)
+        p.recordRun(run(gold = Long.MAX_VALUE / 2))
+        p.recordRun(run(gold = Long.MAX_VALUE / 2))
+        assertTrue(p.lifetimeGold > 0)
+        assertTrue(p.superTokensEarned > 0)
+        assertTrue(p.superTokenProgress in 0f..1f)
     }
 }

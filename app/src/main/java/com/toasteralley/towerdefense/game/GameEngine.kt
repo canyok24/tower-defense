@@ -3,17 +3,20 @@ package com.toasteralley.towerdefense.game
 import com.toasteralley.towerdefense.meta.Progression
 import kotlin.math.atan2
 import kotlin.math.floor
+import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 import kotlin.math.sqrt
 
 /** Summary of a finished run, used to award Tokens and lifetime gold. */
 data class RunResult(
+    /** True if the wave-20 victory milestone was reached (the run may go on). */
     val victory: Boolean,
     val wavesCleared: Int,
     val kills: Int,
     val bossKills: Int,
     /** All gold income this run (kills, wave clears, early-start bonus; not sell refunds). */
-    val goldEarned: Int,
+    val goldEarned: Long,
     val tokens: Int,
 )
 
@@ -40,7 +43,10 @@ class GameEngine(
         fun onEnemyKilled(type: EnemyType) {}
         fun onLifeLost() {}
         fun onWaveStarted(wave: Int) {}
+        /** The run ended (lives reached 0). [victory] = milestone was reached. */
         fun onGameOver(victory: Boolean, wave: Int) {}
+        /** Wave [MILESTONE_WAVE] cleared: victory banner; the run continues. */
+        fun onMilestone(wave: Int) {}
         /** Called exactly once per run: on game over, victory, restart or quit. */
         fun onRunFinished(result: RunResult) {}
 
@@ -49,7 +55,8 @@ class GameEngine(
         }
     }
 
-    enum class State { BETWEEN_WAVES, WAVE_ACTIVE, GAME_OVER, VICTORY }
+    /** Waves are endless: a run only ends at GAME_OVER (or when the player quits). */
+    enum class State { BETWEEN_WAVES, WAVE_ACTIVE, GAME_OVER }
 
     /** Global meta/prestige bonuses. Takes effect for new towers and on [reset]. */
     var modifiers: RunModifiers = modifiers
@@ -64,13 +71,19 @@ class GameEngine(
     val projectiles = mutableListOf<Projectile>()
     val effects = mutableListOf<Effect>()
 
-    var gold = WaveDefinitions.STARTING_GOLD + modifiers.bonusStartGold
+    /** Long: endless-wave income grows far beyond Int range. */
+    var gold: Long = (WaveDefinitions.STARTING_GOLD + modifiers.bonusStartGold).toLong()
         internal set
     var lives = WaveDefinitions.STARTING_LIVES + modifiers.bonusLives
         private set
     var wave = 0
         private set
-    val totalWaves = WaveDefinitions.TOTAL_WAVES
+    /** True once wave [WaveDefinitions.MILESTONE_WAVE] has been cleared this run. */
+    var milestoneReached = false
+        private set
+    /** Plan (spawns + economy) of the current / last started wave. */
+    var currentPlan: WavePlan? = null
+        private set
 
     var state = State.BETWEEN_WAVES
         private set
@@ -93,7 +106,7 @@ class GameEngine(
         private set
     var bossKills = 0
         private set
-    var goldEarned = 0
+    var goldEarned = 0L
         private set
     var wavesCleared = 0
         private set
@@ -107,6 +120,11 @@ class GameEngine(
     var shakeTimer = 0f
         private set
     var flashTimer = 0f
+        private set
+    /** Big centered banner (victory milestone etc.), visual only. */
+    var bannerText: String? = null
+        private set
+    var bannerTimer = 0f
         private set
     /** Fixed steps actually simulated during the last [advance] call. */
     var lastSubsteps = 0
@@ -122,15 +140,18 @@ class GameEngine(
 
     fun reset() {
         towers.clear(); enemies.clear(); projectiles.clear(); effects.clear(); spawnQueue.clear()
-        gold = WaveDefinitions.STARTING_GOLD + modifiers.bonusStartGold
+        gold = (WaveDefinitions.STARTING_GOLD + modifiers.bonusStartGold).toLong()
         lives = WaveDefinitions.STARTING_LIVES + modifiers.bonusLives
         wave = 0
+        milestoneReached = false
+        currentPlan = null
+        bannerText = null; bannerTimer = 0f
         state = State.BETWEEN_WAVES
         countdown = WaveDefinitions.FIRST_WAVE_COUNTDOWN
         paused = false
         speedMultiplier = 1
         message = null
-        kills = 0; bossKills = 0; goldEarned = 0; wavesCleared = 0
+        kills = 0; bossKills = 0; goldEarned = 0L; wavesCleared = 0
         runResult = null
         accumulator = 0.0
         shakeTimer = 0f; flashTimer = 0f
@@ -141,10 +162,15 @@ class GameEngine(
         messageTimer = seconds
     }
 
-    private fun earn(amount: Int) {
-        gold += amount
-        goldEarned += amount
+    /** Adds income with saturation at [WaveDefinitions.MAX_GOLD] (never overflows). */
+    private fun earn(amount: Long) {
+        if (amount <= 0) return
+        gold = satAdd(gold, amount)
+        goldEarned = satAdd(goldEarned, amount)
     }
+
+    private fun satAdd(a: Long, b: Long): Long =
+        if (a >= WaveDefinitions.MAX_GOLD - b) WaveDefinitions.MAX_GOLD else a + b
 
     // ---------------------------------------------------------------- run end
 
@@ -155,8 +181,8 @@ class GameEngine(
      */
     fun finishRun(): RunResult? {
         runResult?.let { return it }
-        if (wave == 0 && kills == 0 && goldEarned == 0) return null
-        val victory = state == State.VICTORY
+        if (wave == 0 && kills == 0 && goldEarned == 0L) return null
+        val victory = milestoneReached
         val result = RunResult(
             victory = victory,
             wavesCleared = wavesCleared,
@@ -237,21 +263,26 @@ class GameEngine(
         // Reward starting early.
         val early = countdown.toInt()
         if (wave > 0 && early > 0) {
-            earn(early)
+            earn(early.toLong())
             showMessage("Early start bonus +$early gold", 1.5f)
         }
         wave++
         spawnQueue.clear()
-        spawnQueue.addAll(WaveDefinitions.build(wave))
+        val plan = WaveDefinitions.plan(wave)
+        currentPlan = plan
+        spawnQueue.addAll(plan.spawns)
         spawnTimer = 0.5f
         state = State.WAVE_ACTIVE
         events.onWaveStarted(wave)
     }
 
-    private fun spawn(type: EnemyType) {
+    private fun spawn(entry: SpawnEntry) {
         val start = map.waypoints.first()
-        enemies += Enemy(type, type.baseHp * WaveDefinitions.hpMultiplier(wave), start.x, start.y)
+        enemies += Enemy(entry.type, entry.hp, start.x, start.y, entry.speedMult, entry.bounty)
     }
+
+    /** Test hook: jump straight to [n] (the next started wave is n + 1). */
+    internal fun debugSetWave(n: Int) { wave = n; wavesCleared = n }
 
     // ---------------------------------------------------------------- time
 
@@ -269,6 +300,7 @@ class GameEngine(
      * instead of using a larger, less accurate dt. Returns steps simulated.
      */
     fun advance(realDt: Float, maxSubsteps: Int = MAX_SUBSTEPS_PER_FRAME): Int {
+        if (bannerTimer > 0f) { bannerTimer -= realDt; if (bannerTimer <= 0f) bannerText = null }
         if (shakeTimer > 0f) shakeTimer -= realDt
         if (flashTimer > 0f) flashTimer -= realDt
         if (paused || !isRunning) {
@@ -329,7 +361,7 @@ class GameEngine(
         spawnTimer -= dt
         while (spawnTimer <= 0f && spawnQueue.isNotEmpty()) {
             val entry = spawnQueue.removeFirst()
-            spawn(entry.type)
+            spawn(entry)
             spawnTimer += spawnQueue.firstOrNull()?.delay ?: 0f
         }
     }
@@ -464,7 +496,8 @@ class GameEngine(
     }
 
     private fun onKilled(e: Enemy) {
-        val reward = (e.type.reward * modifiers.killGoldMult).roundToInt()
+        // Base bounty x meta Gold per Kill x prestige Gold per Kill (multiplicative).
+        val reward = scaleGold(e.bounty, modifiers.killGoldMult.toDouble() * modifiers.prestigeKillGoldMult)
         earn(reward)
         kills++
         if (e.type == EnemyType.BOSS) bossKills++
@@ -533,18 +566,31 @@ class GameEngine(
     private fun checkWaveEnd() {
         if (state != State.WAVE_ACTIVE) return
         if (spawnQueue.isNotEmpty() || enemies.isNotEmpty()) return
-        val bonus = WaveDefinitions.clearBonus(wave)
+        val base = currentPlan?.takeIf { it.wave == wave }?.waveGold ?: WaveDefinitions.clearBonus(wave)
+        val bonus = scaleGold(base, modifiers.prestigeWaveGoldMult.toDouble())
         earn(bonus)
         wavesCleared = wave
-        if (wave >= totalWaves) {
-            state = State.VICTORY
-            events.onGameOver(true, wave)
-            finishRun()
-        } else {
-            state = State.BETWEEN_WAVES
-            countdown = WaveDefinitions.BETWEEN_WAVE_COUNTDOWN
-            showMessage("Wave $wave cleared! +$bonus gold")
+        state = State.BETWEEN_WAVES
+        countdown = WaveDefinitions.BETWEEN_WAVE_COUNTDOWN
+        showMessage("Wave $wave cleared! +${GoldFormat.compact(bonus)} gold")
+        if (wave == WaveDefinitions.MILESTONE_WAVE && !milestoneReached) {
+            // Victory milestone: awarded once per run; endless waves continue.
+            milestoneReached = true
+            showBanner("VICTORY! Wave $wave cleared - endless waves continue", 4f)
+            events.onMilestone(wave)
+        } else if (wave % 50 == 0) {
+            showBanner("Wave $wave milestone!", 2.5f)
         }
+    }
+
+    private fun showBanner(text: String, seconds: Float) {
+        bannerText = text
+        bannerTimer = seconds
+    }
+
+    private fun scaleGold(base: Long, mult: Double): Long {
+        val v = base.toDouble() * mult
+        return if (v.isNaN() || v <= 0.0) 0L else min(WaveDefinitions.MAX_GOLD.toDouble(), v).roundToLong()
     }
 
     companion object {

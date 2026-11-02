@@ -50,9 +50,9 @@ class Tower(
     fun bulkCost(count: Int): Int = UpgradeCosts.costRange(type, level, (level + count).coerceAtMost(MAX_LEVEL))
 
     /** How many levels [gold] can buy in a row, starting from the current level. */
-    fun maxAffordable(gold: Int): Int {
+    fun maxAffordable(gold: Long): Int {
         var n = 0
-        var spent = 0
+        var spent = 0L
         while (level + n < MAX_LEVEL) {
             val c = UpgradeCosts.costToReach(type, level + n + 1)
             if (spent + c > gold) break

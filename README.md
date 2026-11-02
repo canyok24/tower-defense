@@ -29,12 +29,13 @@ products) and a banner-ad abstraction with optional AdMob (test IDs).
 - **11 tower types** (4 premium) with unique drawn sprites and colors: projectiles, splash, slow-on-hit, instant hits, a branching continuous laser beam, stun pulses and a screen-shaking nuke.
 - **20 in-run upgrade levels per tower** with data-driven stat curves, milestone bonuses at levels 10 and 20, steep late-game costs, bulk buy (**x5** and **Max affordable**) and **Sell** (70% of everything invested).
 - **4 enemy types** with HP bars, armor, slow and **stun** indicators, hit flash. Bosses resist stuns.
-- **Wave system**: 20 waves with increasing count, HP scaling (+14%/wave), new enemy types unlocking, boss every 5th wave. Between-wave countdown with a **Start wave** button (early-start gold bonus) and a clear bonus.
+- **Endless waves**: 20 handcrafted waves, then procedurally generated waves forever (no cap). Clearing wave 20 is the **Victory milestone** (banner + Tokens bonus once per run) and the run continues. HP, count, mix and speed scale smoothly; bosses every 5 waves (more on every 10th). Between-wave countdown with a **Start wave** button (early-start gold bonus) and end-of-wave gold.
+- **Designed gold economy**: income vs. a measurable "cost to kill" each wave — very generous early (5× at wave 1, >2× through wave 100), parity around wave 1000 (see *Economy*).
 - **Game speed 1x–10x, 12x, 14x**: tap the speed button to cycle, or ▾ for a popup list. Fixed 1/60 s simulation steps (see *Game speed*).
 - **Tokens (meta progression)**: earned at the end of every run, spent on permanent global upgrades on the **Upgrades** screen.
-- **Super Tokens (prestige)**: accrue automatically from lifetime gold; spend them to reset progression for a permanent damage multiplier. Not a purchase.
+- **Super Tokens (prestige)**: accrue automatically from lifetime gold; at a reset, split them across three permanent upgrades (tower damage, gold per kill, gold per wave). Not a purchase.
 - **Pause** menu (Resume / Restart / Main menu), auto-pause when the app is backgrounded, Back button opens pause.
-- **Game over** and **Victory** screens showing Tokens earned; best wave saved.
+- **Game over** screen (gold "Victory! Run over" if the wave-20 milestone was reached) showing Tokens earned; best wave saved (unbounded).
 - **Main menu**, **Game**, **Upgrades** and **Settings** activities (sound toggle, restore purchases, reset best score).
 - **Google Play Billing Library 8** (`BillingManager`): connection with auto service reconnection plus exponential back-off reconnect, product-details query, purchase flow, acknowledgement, restore on startup and on resume, revoke on refund, pending-purchase handling, entitlements persisted in SharedPreferences and exposed as `StateFlow`.
 - **Store dialog** (from main menu and in-game HUD) with live localized prices, Owned state, Restore button, the Play Console note, and debug-only local grants.
@@ -105,7 +106,16 @@ Speeds: **1x, 2x … 10x, 12x, 14x** (tap the speed button to cycle, ▾ to pick
 
 ### Tokens (meta progression)
 
-Earned at the end of **every run** (victory, defeat, restart or quitting to the menu): `2 × waves cleared + kills / 20 + 5 × bosses killed (+20 for victory)` — a full 20-wave win is about 147 Tokens. Shown on the game-over/victory screen and persisted in SharedPreferences (`meta_progress`).
+Earned at the end of **every run** (defeat, restart or quitting to the menu), shown on the game-over screen and persisted in SharedPreferences (`meta_progress`). Because runs are endless, every term is soft-capped (linear up to a knee, then logarithmic) so Tokens don't explode:
+
+```
+soft(x, k)  = x                      if x <= k
+            = k · (1 + ln(x / k))    otherwise   (continuous, sublinear)
+Tokens      = 2 · soft(wavesCleared, 20) + floor(soft(kills / 20, 50)) + 5 · soft(bosses, 8)
+              + 20 if the wave-20 victory milestone was reached (once per run)
+```
+
+A normal 20-wave victory pays exactly the old amount (147 Tokens: 40 + 47 + 40 + 20). Examples: a run to wave 100 (~12k kills, 30 bosses) ≈ 390 Tokens, wave 1000 ≈ 720; even `Int.MAX_VALUE` waves/kills/bosses stays under 2,400.
 
 Spend them on the **Upgrades** screen (main menu) — permanent, global, applied to all towers in future runs, multiplied on top of tower level stats:
 
@@ -123,32 +133,78 @@ Cost of level L+1 = `niceRound(baseCost × growth^L)` (growth 1.28–1.32).
 
 ### Super Tokens (prestige)
 
-Super Tokens are **never sold** (no billing products) and have no milestone rewards — they accrue automatically from **lifetime gold earned across all runs combined** (kills, wave clears and early-start bonuses; not sell refunds):
+Super Tokens are **never sold** (no billing products) and have no milestone rewards — they accrue automatically from **lifetime gold earned across all runs combined** (kills, wave gold and early-start bonuses; not sell refunds). `K` was raised from 4,000 to **100,000** together with the new economy (gold income is roughly 25× higher than before), keeping a similar pace:
 
 ```
-superTokensEarned    = floor( sqrt( lifetimeGold / 4000 ) )   # n-th token needs 4000·n² gold
-superTokensAvailable = superTokensEarned − superTokensSpent
-prestigeMultiplier   = 1 + 0.1 × superTokensSpent^0.8         # 1→×1.10, 3→×1.24, 10→×1.63, 50→×3.29
+superTokensEarned    = floor( sqrt( lifetimeGold / 100000 ) )   # n-th token needs 100000·n² gold
+superTokensAvailable = superTokensEarned − (spent on damage + kill gold + wave gold)
 ```
 
-The Upgrades screen shows available/earned/spent Super Tokens, a progress bar to the next one, and the current prestige multiplier (also shown in the in-game HUD). **Reset (Prestige)** opens a confirmation dialog (with a slider to spend all or a chosen amount) explaining what is wiped:
+At a reset the player **allocates** Super Tokens across three permanent upgrades; each category's total spent `n` is tracked separately (`super_spent_damage`, `super_spent_kill_gold`, `super_spent_wave_gold`):
+
+| Prestige upgrade | Multiplier after n Super Tokens | n = 1 | 5 | 10 | 50 | Cap |
+|---|---|---|---|---|---|---|
+| Tower damage (baseline) | `1 + 0.1 · n^0.8` | ×1.10 | ×1.36 | ×1.63 | ×3.29 | none |
+| Gold per Kill | `min(2.5, 1 + 0.05 · n^0.7)` | ×1.05 | ×1.15 | ×1.25 | ×1.77 | ×2.5 (n ≈ 129) |
+| Gold per Wave (end-of-wave gold) | `min(2.0, 1 + 0.05 · n^0.7)` | ×1.05 | ×1.15 | ×1.25 | ×1.77 | ×2.0 (n ≈ 72) |
+
+Kill gold paid = base bounty × meta Gold per Kill × prestige Gold per Kill (multiplicative); wave gold = base wave gold × prestige Gold per Wave. Damage = level stats × meta Damage × prestige damage. Older saves with a single `super_tokens_spent` counter are migrated once into the damage category.
+
+The Upgrades screen shows available/earned/spent Super Tokens, a progress bar to the next one, and all three multipliers (also in the in-game HUD and on the main menu). **Reset (Prestige)** opens a confirmation dialog with **− / +** steppers per category (default: all into damage; "+" pulls from another category when everything is allocated) and shows each resulting multiplier (before → after) before confirming. Unallocated Super Tokens are kept.
 
 - **Wiped**: Tokens, every meta upgrade level, best wave and run stats.
-- **Kept**: purchases/entitlements (`remove_ads`, `unlock_premium_towers`), settings, the prestige multiplier, total Super Tokens spent, unspent Super Tokens.
+- **Kept**: purchases/entitlements (`remove_ads`, `unlock_premium_towers`), settings, all prestige multipliers, Super Tokens spent, unspent Super Tokens.
 - **Lifetime gold**: the counter is not zeroed (that would let the cheap first tokens be earned again); spent tokens are subtracted instead, so each Super Token can only be earned once and gold keeps counting toward the next one.
 
-The prestige multiplier multiplies every tower's damage (on top of level stats and meta Damage).
+### Endless waves
+
+- **Waves 1–20** keep their handcrafted composition and the `1.14^(w−1)` HP curve. Clearing **wave 20** shows a VICTORY banner, awards the +20 victory Tokens (once per run) and the run **continues**; a smaller banner appears every 50 waves. The run ends only when lives reach 0 (or you quit).
+- **Wave 21+** are generated forever from the same base formulas (grunts `5+2w`, runners `2+2(w−3)`, tanks `1+⌊(w−5)/2⌋`) with a deterministic mix rotation: every 11th wave is *armored* (×2.5 tanks), every 7th a *rush* (×1.5 runners), every 3rd a *swarm* (×1.2 grunts). Bosses every 5 waves (`⌊w/20⌋+1`), more on every 10th (`⌊w/10⌋+1`).
+- **HP**: `hp(w) = hp(20) · (1 + (w−20)/61.5)^2` after wave 20 (smooth, < 4% per wave).
+- **Clamps (no overflow/NaN at wave 10,000+)**: at most 140 non-boss enemies and 6 bosses per wave — excess count is converted into HP so total wave HP is preserved; spawn interval floor 0.25 s; enemy speed `min(1.4, 1 + 0.08·ln(w/20))`; per-enemy HP ≤ 1e30. Enemy HP is `Double`, gold/income are `Long` (saturating at 4e15), all curve math is `Double`. Tests cover waves 10,000, 100,000, 1,000,000 and `Int.MAX_VALUE`.
+- Best wave is stored as an unbounded counter.
+
+### Economy
+
+Gold per kill and per wave are derived from a measurable cost of killing each wave (`game/WaveDefinitions.kt`, `WaveDefinitions.plan(w)`):
+
+```
+EHP(w)          = sum of the HP of every enemy in wave w
+duration(w)     = spawn time of the wave + engage time (2 · Arrow range / grunt speed = 4.16 s, ÷ speed multiplier)
+refDpsPerGold   = max over L of Arrow dps(L) / (build + upgrade gold to L)   = 0.28 dps/gold (Arrow L1)
+costToKill(w)   = EHP(w) / duration(w) / refDpsPerGold      # gold of reference-tower investment that delivers the wave's HP in time
+targetRatio(w)  = 1 + 4 · (1 − ln w / ln 1000)               for w ≤ 1000   (5.0 at w=1, 2.33 at w=100, 1.0 at w=1000)
+                = 1 / (1 + 0.1 · ln(w / 1000))               for w > 1000   (0.86 at 5000, 0.81 at 10,000, 0.69 at 100,000)
+income(w)       = targetRatio(w) · costToKill(w)
+kill bounty     = floor(0.75 · income · enemyHP / EHP)       # bounty proportional to HP (≥ 1)
+wave gold       = income − Σ bounties                         # ≈ 25%
+```
+
+`ratio(w) = income(w) / costToKill(w)` is measured from the rounded gold actually paid; unit tests check ratio ≥ 2 for every wave 1–100, 0.85–1.15 at wave 1000, ≤ 1 afterwards, non-increasing over waves 1–3000, and no overflow at 100,000. Meta/prestige gold multipliers apply on top and are not counted in the ratio.
+
+| Wave | Grunt HP | Enemies | Gold/kill (grunt) | Wave gold | Income | costToKill | Ratio |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 40 | 7 | 52 | 122 | 486 | 97 | 5.00 |
+| 10 | 130 | 46 | 35 | 1,389 | 5,511 | 1,503 | 3.67 |
+| 20 | 482 | 92 | 93 | 6,416 | 25,512 | 7,813 | 3.27 |
+| 50 | 1,698 | 146 | 194 | 19,242 | 76,708 | 28,050 | 2.73 |
+| 100 | 8,177 | 146 | 816 | 77,487 | 309,770 | 132,800 | 2.33 |
+| 500 | 596,400 | 146 | 43,079 | 3,998,326 | 15,992,898 | 11.41M | 1.40 |
+| 1000 | 4.47M | 145 | 234,581 | 21,408,981 | 85,635,641 | 85.64M | 1.00 |
+| 5000 | 523M | 146 | 23,509,326 | 2.14B | 8.58B | 9.96B | 0.86 |
+
+(Grunt HP includes count compression after the 140-enemy clamp; bosses carry a larger share of wave HP and gold, e.g. wave 10 boss 4,553 HP / 1,232 gold.) Note the practical ceiling of a run is DPS, not gold: towers cap at level 20 and the map has a fixed number of tiles, so late waves are limited by meta/prestige multipliers rather than income.
 
 ### Enemies
 
-| Enemy  | Base HP | Speed (tiles/s) | Armor | Gold | Lives lost | Stun taken |
-|--------|--------:|----------------:|------:|-----:|-----------:|-----------:|
-| Grunt (normal) | 40   | 1.25 | 0 | 5   | 1  | 100% |
-| Runner (fast)  | 24   | 2.5  | 0 | 6   | 1  | 100% |
-| Tank           | 170  | 0.7  | 3 | 14  | 2  | 75% |
-| Boss           | 1400 | 0.5  | 6 | 120 | 10 | 35% |
+| Enemy  | Base HP | Speed (tiles/s) | Armor | Lives lost | Stun taken |
+|--------|--------:|----------------:|------:|-----------:|-----------:|
+| Grunt (normal) | 40   | 1.25 | 0 | 1  | 100% |
+| Runner (fast)  | 24   | 2.5  | 0 | 1  | 100% |
+| Tank           | 170  | 0.7  | 3 | 2  | 75% |
+| Boss           | 1400 | 0.5  | 6 | 10 | 35% |
 
-Armor is subtracted from each hit (minimum 1 damage); laser beams ignore armor.
+HP scales per wave (see *Endless waves*); kill gold is set per wave by the economy (proportional to HP). Armor is subtracted from each hit (minimum 1 damage); laser beams ignore armor.
 
 ---
 
@@ -179,9 +235,10 @@ tower-defense/
 │       │   │   │   ├── GameMap.kt         # grid + path waypoints
 │       │   │   │   ├── TowerType.kt / Tower.kt
 │       │   │   │   ├── TowerStats.kt      # level curves (1-20), clamps, UpgradeCosts, RunModifiers
+│       │   │   │   ├── GoldFormat.kt      # compact big-number formatting
 │       │   │   │   ├── EnemyType.kt / Enemy.kt
 │       │   │   │   ├── Projectile.kt      # projectiles + visual effects
-│       │   │   │   └── WaveDefinitions.kt # wave composition & difficulty curve
+│       │   │   │   └── WaveDefinitions.kt # endless waves + economy (WavePlan, costToKill, ratio)
 │       │   │   ├── meta/
 │       │   │   │   ├── Progression.kt     # Tokens, MetaUpgrade, Super Tokens, prestige
 │       │   │   │   └── KeyValueStore.kt   # SharedPreferences / in-memory store
@@ -198,7 +255,7 @@ tower-defense/
 │       │   │       └── Insets.kt          # immersive mode helper
 │       │   └── res/ (layouts, vector drawables, adaptive icon, themes, xml backup rules)
 │       └── test/…/ (GameEngineTest, TowerMechanicsTest, UpgradeCostTest,
-│                     SimulationSpeedTest, meta/ProgressionTest)
+│                     SimulationSpeedTest, EconomyTest, meta/ProgressionTest)
 ├── README.md
 └── LICENSE
 ```
@@ -341,9 +398,9 @@ For production, verify purchase tokens server-side with the Google Play Develope
 ## Customizing towers and waves
 
 - **Towers** – `game/TowerType.kt`: each enum entry has `cost`, `range` (tiles), `damage`, `fireRate` (shots/s), `projectileSpeed`, `attack` (PROJECTILE / INSTANT / BEAM / PULSE), `splashRadius`, `slowFactor`/`slowDuration`, `stunDuration`/`stunCooldown`, `beamTargets`/`beamSecondary`, `bossBonus`, `upgradeBase`, `premium`, `color`, `role`. Add an entry and it automatically appears in the build panel; add a `when` branch in `GameView.drawTowerShape` for a custom look. Level curves, milestones, clamps and max level: `game/TowerStats.kt`; upgrade cost multipliers: `UpgradeCosts`; refund rate: `Tower.SELL_REFUND`.
-- **Meta / prestige** – `meta/Progression.kt`: Token award constants, `MetaUpgrade` levels/costs, `SUPER_TOKEN_GOLD_K` and the prestige formula.
-- **Enemies** – `game/EnemyType.kt`: `baseHp`, `speed`, `reward`, `damageToBase`, `radius`, `color`, `armor`. Render shape in `GameView.drawEnemies`.
-- **Waves** – `game/WaveDefinitions.kt`: `TOTAL_WAVES`, countdowns, starting gold/lives, `hpMultiplier(wave)`, `clearBonus(wave)` and `build(wave)` which returns the ordered spawn list (`SpawnEntry(type, delayBeforeSpawn)`). Replace `build` with a hand-authored table for fully scripted waves.
+- **Meta / prestige** – `meta/Progression.kt`: Token award constants and soft-cap knees, `MetaUpgrade` levels/costs, `SUPER_TOKEN_GOLD_K`, `PrestigeUpgrade` formulas and caps.
+- **Enemies** – `game/EnemyType.kt`: `baseHp`, `speed`, `damageToBase`, `radius`, `color`, `armor`, stun resistance. Render shape in `GameView.drawEnemies`.
+- **Waves / economy** – `game/WaveDefinitions.kt`: `MILESTONE_WAVE`, countdowns, starting gold/lives, `hpMultiplier`, `speedMultiplier`, `spawnInterval`, clamps (`MAX_NON_BOSS`, `MAX_BOSSES`, `SPAWN_INTERVAL_FLOOR`, `SPEED_CAP`, `MAX_GOLD`), `targetRatio` and `KILL_SHARE`. `plan(wave)` returns a `WavePlan` (spawns with HP/bounty/speed, wave gold, EHP, duration, costToKill, ratio).
 - **Map** – `game/GameMap.kt`: `GameMap.default()` lists path waypoints in grid coordinates (segments must be horizontal or vertical; first/last waypoints may sit just outside the grid). `COLS`/`ROWS` set the grid size.
 - **Products** – IDs are constants in `BillingManager`; store copy is in `ui/StoreDialog.kt`.
 

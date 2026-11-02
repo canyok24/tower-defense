@@ -58,7 +58,7 @@ class MainMenuActivity : AppCompatActivity() {
         val best = p.bestWave
         val line = StringBuilder()
         if (best > 0) line.append(getString(R.string.best_wave, best)).append("  ·  ")
-        line.append(getString(R.string.tokens_line, p.tokens, p.superTokensAvailable, p.prestigeMultiplier))
+        line.append(getString(R.string.tokens_line, p.tokens, p.superTokensAvailable, p.prestigeMultiplier, p.prestigeKillGoldMultiplier, p.prestigeWaveGoldMultiplier))
         bestWave.text = line
     }
 

@@ -431,6 +431,7 @@ class GameView @JvmOverloads constructor(
         drawHud(c)
         drawPanel(c)
         drawMessage(c)
+        drawBanner(c)
         if (speedMenuOpen) drawSpeedMenu(c)
         drawOverlay(c)
     }
@@ -667,7 +668,7 @@ class GameView @JvmOverloads constructor(
             val bw = tile * 0.7f; val bh = tile * 0.08f
             val top = cy - r - bh * 2.5f
             fill.color = 0xCC000000.toInt(); c.drawRect(cx - bw / 2, top, cx + bw / 2, top + bh, fill)
-            val frac = (e.hp / e.maxHp).coerceIn(0f, 1f)
+            val frac = (e.hp / e.maxHp).toFloat().coerceIn(0f, 1f)
             fill.color = when { frac > 0.6f -> 0xFF66BB6A.toInt(); frac > 0.3f -> 0xFFFFCA28.toInt(); else -> 0xFFEF5350.toInt() }
             c.drawRect(cx - bw / 2, top, cx - bw / 2 + bw * frac, top + bh, fill)
         }
@@ -756,10 +757,12 @@ class GameView @JvmOverloads constructor(
         c.drawRect(hudRect, fill)
         text.textAlign = Paint.Align.LEFT
         val parts = listOf(
-            "Gold ${e.gold}" to 0xFFFFD54F.toInt(),
+            "Gold ${GoldFormat.compact(e.gold)}" to 0xFFFFD54F.toInt(),
             "Lives ${e.lives}" to 0xFFEF5350.toInt(),
-            "Wave ${e.wave}/${e.totalWaves}" to Color.WHITE,
-            "Prestige ×%.2f".format(e.modifiers.prestigeMult) to 0xFFFFAB40.toInt(),
+            (if (e.milestoneReached) "Wave ${e.wave} ∞" else "Wave ${e.wave}") to Color.WHITE,
+            "Prestige dmg ×%.2f · kill ×%.2f · wave ×%.2f".format(
+                e.modifiers.prestigeMult, e.modifiers.prestigeKillGoldMult, e.modifiers.prestigeWaveGoldMult
+            ) to 0xFFFFAB40.toInt(),
         )
         val avail = pauseBtn.left - hudRect.height() * 0.5f
         val gap = hudRect.height() * 0.45f
@@ -919,16 +922,35 @@ class GameView @JvmOverloads constructor(
             drawButton(c, upgradeMaxBtn, "Max", 0xFF555555.toInt(), false, 0.34f)
         } else {
             val c1 = t.upgradeCost
-            drawButton(c, upgradeBtn, "Upgrade → L${t.level + 1}  ${c1}g", 0xFF1565C0.toInt(), e.gold >= c1, 0.34f)
+            drawButton(c, upgradeBtn, "Upgrade → L${t.level + 1}  ${GoldFormat.compact(c1.toLong())}g", 0xFF1565C0.toInt(), e.gold >= c1, 0.34f)
             val n5 = min(5, Tower.MAX_LEVEL - t.level)
             val c5 = t.bulkCost(n5)
-            drawButton(c, upgrade5Btn, "x$n5 ${c5}g", 0xFF0D47A1.toInt(), e.gold >= c5, 0.34f)
+            drawButton(c, upgrade5Btn, "x$n5 ${GoldFormat.compact(c5.toLong())}g", 0xFF0D47A1.toInt(), e.gold >= c5, 0.34f)
             val nMax = t.maxAffordable(e.gold)
             val cMax = t.bulkCost(nMax)
-            drawButton(c, upgradeMaxBtn, if (nMax > 0) "Max +$nMax ${cMax}g" else "Max", 0xFF0D47A1.toInt(), nMax > 0, 0.34f)
+            drawButton(c, upgradeMaxBtn, if (nMax > 0) "Max +$nMax ${GoldFormat.compact(cMax.toLong())}g" else "Max", 0xFF0D47A1.toInt(), nMax > 0, 0.34f)
         }
         drawButton(c, sellBtn, "Sell +${t.sellValue}g", 0xFFC62828.toInt(), true, 0.34f)
         drawButton(c, closeBtn, "Close", 0xFF455A64.toInt(), true, 0.34f)
+    }
+
+    /** Victory-milestone / wave-milestone banner; the game keeps running. */
+    private fun drawBanner(c: Canvas) {
+        val msg = engine.bannerText ?: return
+        val alpha = (engine.bannerTimer / 0.5f).coerceIn(0f, 1f)
+        text.textAlign = Paint.Align.CENTER
+        text.textSize = height * 0.075f
+        while (text.measureText(msg) > panelRect.left * 0.85f && text.textSize > 10f) text.textSize *= 0.92f
+        val cx = panelRect.left / 2f
+        val cy = (hudRect.bottom + height) / 2f
+        val h = text.textSize * 1.8f
+        val half = min(panelRect.left * 0.48f, text.measureText(msg) / 2f + h)
+        tmpRect.set(cx - half, cy - h / 2, cx + half, cy + h / 2)
+        fill.color = Color.argb((200 * alpha).toInt(), 40, 20, 0)
+        c.drawRoundRect(tmpRect, 18f, 18f, fill)
+        text.color = Color.argb((255 * alpha).toInt(), 255, 213, 79)
+        c.drawText(msg, cx, cy - (text.ascent() + text.descent()) / 2f, text)
+        text.color = Color.WHITE
     }
 
     private fun drawMessage(c: Canvas) {
@@ -950,17 +972,20 @@ class GameView @JvmOverloads constructor(
         val title: String
         val subtitle: String
         when {
-            e.state == GameEngine.State.GAME_OVER -> { title = "Game Over"; subtitle = "You cleared ${e.wavesCleared} of ${e.totalWaves} waves" }
-            e.state == GameEngine.State.VICTORY -> { title = "Victory!"; subtitle = "All ${e.totalWaves} waves defeated with ${e.lives} lives left" }
-            e.paused -> { title = "Paused"; subtitle = "Wave ${e.wave}/${e.totalWaves} · ${e.gold} gold · ${e.speedMultiplier}x" }
+            e.state == GameEngine.State.GAME_OVER && e.milestoneReached -> {
+                title = "Victory! Run over"
+                subtitle = "Wave ${WaveDefinitions.MILESTONE_WAVE} milestone reached · endless run ended after ${e.wavesCleared} waves"
+            }
+            e.state == GameEngine.State.GAME_OVER -> { title = "Game Over"; subtitle = "You cleared ${e.wavesCleared} waves" }
+            e.paused -> { title = "Paused"; subtitle = "Wave ${e.wave} · ${GoldFormat.compact(e.gold)} gold · ${e.speedMultiplier}x" }
             else -> return
         }
         c.drawColor(0xB0000000.toInt())
         text.textAlign = Paint.Align.CENTER
         text.textSize = height * 0.12f
-        text.color = when (e.state) {
-            GameEngine.State.VICTORY -> 0xFFFFD54F.toInt()
-            GameEngine.State.GAME_OVER -> 0xFFEF5350.toInt()
+        text.color = when {
+            e.state == GameEngine.State.GAME_OVER && e.milestoneReached -> 0xFFFFD54F.toInt()
+            e.state == GameEngine.State.GAME_OVER -> 0xFFEF5350.toInt()
             else -> Color.WHITE
         }
         c.drawText(title, width / 2f, height * 0.25f, text)
@@ -972,7 +997,7 @@ class GameView @JvmOverloads constructor(
             c.drawText("+${result.tokens} Tokens earned", width / 2f, height * 0.41f, text)
             text.textSize = height * 0.036f; text.color = 0xFFB0BEC5.toInt()
             c.drawText(
-                "Kills ${result.kills} · Bosses ${result.bossKills} · Gold earned ${result.goldEarned} · spend Tokens in Upgrades",
+                "Kills ${result.kills} · Bosses ${result.bossKills} · Gold earned ${GoldFormat.compact(result.goldEarned)} · spend Tokens in Upgrades",
                 width / 2f, height * 0.465f, text
             )
         }

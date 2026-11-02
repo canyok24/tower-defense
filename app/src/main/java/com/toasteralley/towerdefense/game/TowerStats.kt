@@ -19,8 +19,12 @@ data class RunModifiers(
     val killGoldMult: Float = 1f,
     val bonusStartGold: Int = 0,
     val bonusLives: Int = 0,
-    /** Permanent prestige multiplier from spent Super Tokens. */
+    /** Permanent prestige damage multiplier (Super Tokens spent on damage). */
     val prestigeMult: Float = 1f,
+    /** Prestige Gold per Kill multiplier; stacks multiplicatively with [killGoldMult]. */
+    val prestigeKillGoldMult: Float = 1f,
+    /** Prestige Gold per Wave multiplier (end-of-wave gold). */
+    val prestigeWaveGoldMult: Float = 1f,
 ) {
     companion object {
         val NONE = RunModifiers()

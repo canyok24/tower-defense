@@ -10,13 +10,15 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
-import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.toasteralley.towerdefense.app
+import com.toasteralley.towerdefense.game.GoldFormat
 import com.toasteralley.towerdefense.meta.MetaUpgrade
+import com.toasteralley.towerdefense.meta.PrestigeAllocation
+import com.toasteralley.towerdefense.meta.PrestigeUpgrade
 import com.toasteralley.towerdefense.meta.Progression
 
 /**
@@ -61,7 +63,8 @@ class UpgradesActivity : AppCompatActivity() {
             textSize = 12f; setTextColor(Color.GRAY)
             text = "Tokens are earned at the end of every run (win or lose): " +
                 "${Progression.TOKENS_PER_WAVE} per wave cleared, 1 per ${Progression.KILLS_PER_TOKEN} kills, " +
-                "${Progression.TOKENS_PER_BOSS} per boss, +${Progression.VICTORY_TOKENS} for victory. " +
+                "${Progression.TOKENS_PER_BOSS} per boss, +${Progression.VICTORY_TOKENS} for the wave-20 victory milestone. " +
+                "Beyond wave 20 (endless), waves, kills and bosses pay logarithmically less per unit. " +
                 "Upgrades apply to all towers in future runs."
         })
 
@@ -133,9 +136,11 @@ class UpgradesActivity : AppCompatActivity() {
         tokensText.text = "Tokens: ${p.tokens}"
         superText.text = "Super Tokens: ${p.superTokensAvailable} available  (${p.superTokensEarned} earned, ${p.superTokensSpent} spent)"
         superProgress.progress = (p.superTokenProgress * 1000).toInt()
-        superProgressText.text = "Lifetime gold earned (all runs): ${p.lifetimeGold}  ·  next Super Token at ${p.goldForNextSuperToken} gold. " +
+        superProgressText.text = "Lifetime gold earned (all runs): ${GoldFormat.compact(p.lifetimeGold)}  ·  next Super Token at ${GoldFormat.compact(p.goldForNextSuperToken)} gold. " +
             "Super Tokens are never sold; they accrue from gold earned in play (each needs more gold)."
-        prestigeText.text = "Prestige damage multiplier: ×%.2f for every tower  ·  prestiges: %d".format(p.prestigeMultiplier, p.prestigeCount)
+        prestigeText.text = PrestigeUpgrade.entries.joinToString("\n") { u ->
+            "%s: ×%.2f  (%d Super Tokens)".format(u.displayName, p.prestigeMultiplier(u), p.spent(u))
+        } + "\nPrestiges: ${p.prestigeCount}"
         prestigeBtn.isEnabled = p.superTokensAvailable > 0
         for (r in rows) {
             val lvl = p.level(r.upgrade)
@@ -147,55 +152,90 @@ class UpgradesActivity : AppCompatActivity() {
             r.buy.isEnabled = cost in 0..p.tokens
         }
         statsText.text = "Best wave ${p.bestWave} · runs ${p.runsPlayed} · kills ${p.totalKills} · bosses ${p.totalBossKills} · " +
-            "Tokens earned ${p.totalTokensEarned} · gold this prestige ${p.cycleGold}"
+            "Tokens earned ${p.totalTokensEarned} · gold this prestige ${GoldFormat.compact(p.cycleGold)}"
     }
 
     private fun confirmPrestige() {
         val p = progression
         val avail = p.superTokensAvailable
         if (avail <= 0) return
-        var amount = avail
+        // Default: everything into damage; the player redistributes with +/-.
+        var alloc = PrestigeAllocation(damage = avail)
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0) }
         box.addView(TextView(this).apply {
-            textSize = 14f
+            textSize = 13f
             text = "Spending Super Tokens resets your progression to the baseline:\n" +
                 "  • WIPED: all Tokens (${p.tokens}), every permanent upgrade level, best wave and run stats.\n" +
-                "  • KEPT: purchases (Remove Ads, Premium Towers), settings, the prestige multiplier, " +
-                "total Super Tokens spent, and any Super Tokens you don't spend now.\n" +
+                "  • KEPT: purchases (Remove Ads, Premium Towers), settings, all prestige multipliers, " +
+                "Super Tokens spent so far, and any Super Tokens you don't allocate now.\n" +
                 "Each Super Token can only be earned once; lifetime gold keeps counting toward the next one.\n\n" +
-                "In exchange every tower's base damage multiplier rises permanently " +
-                "(×(1 + 0.1 × totalSpent^0.8))."
+                "Split your $avail Super Tokens across three permanent upgrades:\n" +
+                "  Damage ×(1 + 0.1·n^0.8) · Gold per Kill ×min(2.5, 1 + 0.05·n^0.7) · Gold per Wave ×min(2.0, 1 + 0.05·n^0.7)\n" +
+                "(n = total Super Tokens ever spent in that category)."
         })
-        val preview = TextView(this).apply { textSize = 15f; setTypeface(typeface, Typeface.BOLD); setPadding(0, dp(8), 0, 0) }
-        fun updatePreview() {
-            val before = Progression.prestigeMultiplierFor(p.superTokensSpent)
-            val after = Progression.prestigeMultiplierFor(p.superTokensSpent + amount)
-            preview.text = "Spend $amount of $avail Super Tokens: ×%.2f → ×%.2f damage".format(before, after)
+        val remainingText = TextView(this).apply { textSize = 15f; setTypeface(typeface, Typeface.BOLD); setPadding(0, dp(8), 0, dp(4)) }
+        box.addView(remainingText)
+        val rowTexts = mutableMapOf<PrestigeUpgrade, TextView>()
+        lateinit var confirm: () -> Unit
+        fun update() {
+            val left = avail - alloc.total
+            remainingText.text = "Allocated ${alloc.total} of $avail  ·  $left kept unspent"
+            for (u in PrestigeUpgrade.entries) {
+                val before = p.spent(u)
+                val after = before + alloc[u]
+                rowTexts[u]?.text = "%s: %d  →  ×%.2f → ×%.2f".format(
+                    u.displayName, alloc[u], u.multiplier(before), u.multiplier(after)
+                )
+            }
+            confirm()
         }
-        box.addView(preview)
-        if (avail > 1) {
-            box.addView(SeekBar(this).apply {
-                max = avail - 1
-                progress = avail - 1
-                setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                    override fun onProgressChanged(s: SeekBar?, v: Int, fromUser: Boolean) { amount = v + 1; updatePreview() }
-                    override fun onStartTrackingTouch(s: SeekBar?) {}
-                    override fun onStopTrackingTouch(s: SeekBar?) {}
-                })
-            })
+        for (u in PrestigeUpgrade.entries) {
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+            val label = TextView(this).apply {
+                textSize = 14f; setTextColor(Color.WHITE)
+                layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
+            }
+            rowTexts[u] = label
+            row.addView(label)
+            row.addView(Button(this).apply {
+                text = "−"
+                setOnClickListener { if (alloc[u] > 0) { alloc = alloc.with(u, alloc[u] - 1); update() } }
+            }, LinearLayout.LayoutParams(dp(52), WRAP_CONTENT))
+            row.addView(Button(this).apply {
+                text = "+"
+                setOnClickListener {
+                    if (alloc.total < avail) alloc = alloc.with(u, alloc[u] + 1)
+                    else {
+                        // Pull one from the largest other category so "+" always works.
+                        val donor = PrestigeUpgrade.entries.filter { it != u && alloc[it] > 0 }.maxByOrNull { alloc[it] }
+                        if (donor != null) alloc = alloc.with(donor, alloc[donor] - 1).let { it.with(u, it[u] + 1) }
+                    }
+                    update()
+                }
+            }, LinearLayout.LayoutParams(dp(52), WRAP_CONTENT))
+            box.addView(row)
         }
-        updatePreview()
-        AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setTitle("Reset (Prestige)?")
             .setView(ScrollView(this).apply { addView(box) })
             .setPositiveButton("Reset & spend") { _, _ ->
-                if (progression.prestige(amount)) {
-                    Toast.makeText(this, "Prestige complete: ×%.2f damage".format(progression.prestigeMultiplier), Toast.LENGTH_LONG).show()
+                if (progression.prestige(alloc)) {
+                    Toast.makeText(
+                        this,
+                        "Prestige complete: damage ×%.2f · kill gold ×%.2f · wave gold ×%.2f".format(
+                            progression.prestigeMultiplier, progression.prestigeKillGoldMultiplier, progression.prestigeWaveGoldMultiplier
+                        ),
+                        Toast.LENGTH_LONG,
+                    ).show()
                 }
                 refresh()
             }
             .setNegativeButton("Cancel", null)
             .setOnDismissListener { enterImmersiveMode() }
-            .show()
+            .create()
+        confirm = { dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.isEnabled = alloc.total > 0 }
+        dialog.setOnShowListener { confirm() }
+        update()
+        dialog.show()
     }
 }

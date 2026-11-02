@@ -63,7 +63,7 @@ class TowerMechanicsTest {
         e.update(dt)
         assertTrue(near.isStunned)
         assertFalse(far.isStunned)
-        assertEquals(100f, near.hp, 0f)
+        assertEquals(100.0, near.hp, 0.0)
         // Cooldown: no second pulse until stunCooldown elapsed.
         val t = e.towers[0]
         assertEquals(t.stats.stunCooldown, t.cooldown, 1e-4f)
@@ -83,14 +83,14 @@ class TowerMechanicsTest {
         run(e, 1f)
         val dps = laser.stats.damage
         assertEquals(TowerType.LASER.damage, dps, 1e-4f)
-        assertEquals(dps, main.maxHp - main.hp, dps * 0.02f)
+        assertEquals(dps.toDouble(), main.maxHp - main.hp, dps * 0.02)
         val hit = others.filter { it.hp < it.maxHp }
         // Level 1: 3 targets total -> 2 branches.
         assertEquals(laser.stats.beamTargets - 1, hit.size)
         for (o in hit) {
             val ratio = (o.maxHp - o.hp) / (main.maxHp - main.hp)
-            assertEquals(laser.stats.beamSecondary, ratio, 1e-3f)
-            assertTrue(ratio in 0.29f..0.41f)
+            assertEquals(laser.stats.beamSecondary.toDouble(), ratio, 1e-3)
+            assertTrue(ratio in 0.29..0.41)
         }
     }
 
@@ -132,9 +132,9 @@ class TowerMechanicsTest {
         run(e, 1.2f)
         assertTrue(target.isSlowed)
         assertEquals(TowerType.SLOW.slowFactor, target.currentSlowFactor, 1e-6f)
-        assertEquals(TowerType.SLOW.damage, target.maxHp - target.hp, 1e-3f)
+        assertEquals(TowerType.SLOW.damage.toDouble(), target.maxHp - target.hp, 1e-3)
         assertFalse(bystander.isSlowed)
-        assertEquals(bystander.maxHp, bystander.hp, 0f)
+        assertEquals(bystander.maxHp, bystander.hp, 0.0)
     }
 
     @Test
@@ -155,7 +155,7 @@ class TowerMechanicsTest {
             while (enemy.hp == enemy.maxHp && t < 5f) { e.update(dt); t += dt }
             val dealt = enemy.maxHp - enemy.hp
             val bonus = if (type.heavyTarget) TowerType.HEAVY.bossBonus else 1f
-            assertEquals("$type", TowerType.HEAVY.damage * bonus - type.armor, dealt, 1e-2f)
+            assertEquals("$type", (TowerType.HEAVY.damage * bonus - type.armor).toDouble(), dealt, 1e-2)
         }
         assertTrue(TowerStats.bossBonusAt(TowerType.HEAVY, 20) > TowerStats.bossBonusAt(TowerType.HEAVY, 1))
         assertTrue(TowerStats.bossBonusAt(TowerType.HEAVY, 20) <= TowerStats.MAX_BOSS_BONUS)

@@ -49,7 +49,7 @@ class UpgradeCostTest {
 
         // "Max affordable": exactly enough for levels 7..9 plus change.
         val sum3 = (7..9).sumOf { UpgradeCosts.costToReach(TowerType.CANNON, it) }
-        e.gold = sum3 + UpgradeCosts.costToReach(TowerType.CANNON, 10) - 1
+        e.gold = (sum3 + UpgradeCosts.costToReach(TowerType.CANNON, 10) - 1).toLong()
         assertEquals(3, t.maxAffordable(e.gold))
         assertEquals(sum3, t.bulkCost(3))
         val g = e.gold
@@ -66,7 +66,7 @@ class UpgradeCostTest {
         val invested = TowerType.CANNON.cost + (2..9).sumOf { UpgradeCosts.costToReach(TowerType.CANNON, it) }
         assertEquals(invested, t.invested)
         e.sellTower(t)
-        assertEquals((invested * 0.7f).roundToInt(), e.gold)
+        assertEquals((invested * 0.7f).roundToInt().toLong(), e.gold)
     }
 
     @Test
