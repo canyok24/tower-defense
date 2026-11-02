@@ -56,13 +56,18 @@ data class WavePlan(
  * continues. See README "Economy" for the design and numbers.
  *
  * Economy: every wave has a measurable
- *   costToKill(w) = (EHP(w) / duration(w)) / referenceDpsPerGold
- * i.e. the gold you would have to invest in the reference tower (Arrow, at its
- * most gold-efficient level) to deliver the wave's total HP during the wave.
- * Base income(w) = kill bounties + wave gold is set to targetRatio(w) x
- * costToKill(w): ~5x at wave 1, still >2x at wave 100, ~1x at wave 1000, and
- * slowly below parity afterwards. 75% of it is paid as kill bounties
- * (proportional to each enemy's HP), 25% (+rounding) as end-of-wave gold.
+ *   requiredDps(w) = EHP(w) / duration(w)
+ *   costToKill(w)  = gold for the cheapest reference build delivering requiredDps(w):
+ *                    [REFERENCE_TOWERS] Arrow towers (a realistic tile budget) bought
+ *                    up the full 1..100 upgrade path (see [referenceBuildCost]).
+ * Early waves are bought with level-1 Arrows (fractional towers, dps/gold 0.28);
+ * once the tile budget is full, every extra DPS has to come from deeper upgrades
+ * (x3 / x1.2 cost steps), so costToKill rises steeply - gold has a real sink.
+ * Past the point where all reference towers are level 100, extra L100 towers are
+ * added linearly. Base income(w) = kill bounties + wave gold is set to
+ * targetRatio(w) x costToKill(w): ~5x at wave 1, still >2x at wave 100, ~1x at
+ * wave 1000, and slowly below parity afterwards. 75% of it is paid as kill
+ * bounties (proportional to each enemy's HP), 25% (+rounding) as end-of-wave gold.
  */
 object WaveDefinitions {
     /** Clearing this wave is the victory milestone; the run continues. */
@@ -84,7 +89,7 @@ object WaveDefinitions {
     /** Per-enemy HP clamp (keeps Float rendering/Double math finite). */
     const val MAX_ENEMY_HP = 1e30
     /** Gold clamp (well below Long.MAX and exactly representable in Double). */
-    const val MAX_GOLD = 4_000_000_000_000_000L
+    const val MAX_GOLD = 4_000_000_000_000_000_000L
 
     // ---- HP curve
     private const val EARLY_HP_GROWTH = 1.14
@@ -101,15 +106,54 @@ object WaveDefinitions {
     /** Seconds a normal enemy spends inside a reference Arrow's range. */
     val ENGAGE_SECONDS: Double = 2.0 * TowerType.ARROW.range / EnemyType.NORMAL.speed
 
-    /**
-     * DPS bought per gold by the reference tower (Arrow) at its most
-     * gold-efficient level: max over L of dps(L) / (build + upgrades to L).
-     */
-    val REFERENCE_DPS_PER_GOLD: Double by lazy {
-        (1..TowerStats.MAX_LEVEL).maxOf { l ->
-            val s = TowerStats.of(TowerType.ARROW, l)
-            s.damage.toDouble() * s.fireRate / (TowerType.ARROW.cost + UpgradeCosts.costRange(TowerType.ARROW, 1, l))
+    /** Tile budget of the reference build used by [referenceBuildCost]. */
+    const val REFERENCE_TOWERS = 24
+
+    /** Reference (Arrow, no meta/prestige) DPS at each level 1..MAX_LEVEL; index 0 unused. */
+    val REFERENCE_DPS: DoubleArray by lazy {
+        DoubleArray(TowerStats.MAX_LEVEL + 1) { l ->
+            if (l == 0) 0.0 else TowerStats.of(TowerType.ARROW, l).let { it.damage.toDouble() * it.fireRate }
         }
+    }
+
+    /** Gold invested in one reference Arrow at each level (build + upgrades); index 0 unused. */
+    val REFERENCE_INVEST: DoubleArray by lazy {
+        DoubleArray(TowerStats.MAX_LEVEL + 1) { l ->
+            if (l == 0) 0.0 else (TowerType.ARROW.cost + UpgradeCosts.costRange(TowerType.ARROW, 1, l)).toDouble()
+        }
+    }
+
+    /** DPS per gold of a level-1 Arrow (the most gold-efficient purchase). */
+    val REFERENCE_DPS_PER_GOLD: Double get() = REFERENCE_DPS[1] / REFERENCE_INVEST[1]
+
+    /**
+     * Cheapest gold that buys [dps] with the reference build. Continuous and
+     * strictly increasing in [dps]:
+     *  - per-tower DPS <= L1: fractional level-1 Arrows (dps / 0.28)
+     *  - L1 < per-tower <= L100: [REFERENCE_TOWERS] Arrows at an interpolated
+     *    level (geometric interpolation of invested gold vs DPS between levels)
+     *  - beyond L100: extra level-100 Arrows, linear in DPS.
+     */
+    fun referenceBuildCost(dps: Double): Double {
+        if (!(dps > 0.0)) return 0.0
+        val dpsL = REFERENCE_DPS
+        val inv = REFERENCE_INVEST
+        val n = REFERENCE_TOWERS.toDouble()
+        val per = dps / n
+        val top = TowerStats.MAX_LEVEL
+        if (per <= dpsL[1]) return dps / REFERENCE_DPS_PER_GOLD
+        if (per >= dpsL[top]) return n * inv[top] * (per / dpsL[top])
+        var l = 1
+        while (l < top - 1 && dpsL[l + 1] < per) l++
+        val t = ln(per / dpsL[l]) / ln(dpsL[l + 1] / dpsL[l])
+        return n * inv[l] * (inv[l + 1] / inv[l]).pow(t)
+    }
+
+    /** Reference build level reached for [dps] (101 = beyond level 100), for docs/tests. */
+    fun referenceLevelFor(dps: Double): Int {
+        val per = dps / REFERENCE_TOWERS
+        for (l in 1..TowerStats.MAX_LEVEL) if (REFERENCE_DPS[l] >= per) return l
+        return TowerStats.MAX_LEVEL + 1
     }
 
     /** Enemy HP multiplier for [wave] (1-based), finite for any Int wave. */
@@ -197,7 +241,7 @@ object WaveDefinitions {
         val ehp = sized.indices.sumOf { hps[it] * sized[it].count }
         val spawnTime = sized.sumOf { s -> s.g.firstDelay.toDouble() + s.g.delay.toDouble() * (s.count - 1) }
         val duration = spawnTime + ENGAGE_SECONDS / speed
-        val costToKill = ehp / duration / REFERENCE_DPS_PER_GOLD
+        val costToKill = referenceBuildCost(ehp / duration)
         val ratio = targetRatio(w)
         val income = min(MAX_GOLD.toDouble(), ratio * costToKill)
         val killPool = KILL_SHARE * income

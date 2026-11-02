@@ -36,7 +36,7 @@ enum class MetaUpgrade(
     fun valueAt(level: Int): Float = level.coerceIn(0, maxLevel) * perLevel
 
     /** Tokens needed to go from [level] to level + 1. */
-    fun costFrom(level: Int): Int = UpgradeCosts.niceRound(baseCost * costGrowth.pow(level))
+    fun costFrom(level: Int): Int = UpgradeCosts.niceRound(baseCost * costGrowth.pow(level)).toInt()
 
     fun format(level: Int): String {
         val v = valueAt(level)
@@ -81,7 +81,9 @@ data class PrestigeAllocation(val damage: Int = 0, val killGold: Int = 0, val wa
  *
  * Super Tokens (prestige currency, never sold):
  *  - lifetime gold G = all gold income across every run ever played
- *  - total earned  = floor(sqrt(G / [SUPER_TOKEN_GOLD_K]))  -> k-th token needs K*k^2 gold
+ *  - total earned  = floor((G / [SUPER_TOKEN_GOLD_K])^(1/4))  -> k-th token needs K*k^4 gold
+ *    (fourth root, because the level-100 upgrade economy makes late-wave gold
+ *    grow far faster than before; K = 100,000)
  *  - available     = total earned - total spent
  *  - at a reset the player splits Super Tokens across three permanent
  *    [PrestigeUpgrade]s, tracked separately:
@@ -223,8 +225,10 @@ class Progression(private val store: KeyValueStore) {
     }
 
     companion object {
-        /** Gold scale of the Super Token curve (sized for the endless-wave economy). */
+        /** Gold scale of the Super Token curve (sized for the level-100 economy). */
         const val SUPER_TOKEN_GOLD_K = 100_000L
+        /** Super Tokens = (G / K)^(1 / SUPER_TOKEN_ROOT). */
+        const val SUPER_TOKEN_ROOT = 4
         const val PRESTIGE_COEFF = 0.1f
         const val PRESTIGE_EXP = 0.8
 
@@ -269,10 +273,20 @@ class Progression(private val store: KeyValueStore) {
         private fun satAdd(a: Long, b: Long): Long = if (b > 0 && a > Long.MAX_VALUE / 2 - b) Long.MAX_VALUE / 2 else a + b
 
         fun superTokensForGold(gold: Long): Int =
-            if (gold <= 0) 0 else floor(sqrt(gold.toDouble() / SUPER_TOKEN_GOLD_K) + 1e-9).toInt()
+            if (gold <= 0) 0 else {
+                // Exact integer check around the floating estimate (no rounding drift).
+                var n = floor(sqrt(sqrt(gold.toDouble() / SUPER_TOKEN_GOLD_K))).toInt()
+                while (n > 0 && goldForSuperTokens(n) > gold) n--
+                while (goldForSuperTokens(n + 1) <= gold) n++
+                n
+            }
 
-        /** Lifetime gold at which the [n]-th Super Token is earned: K * n^2. */
-        fun goldForSuperTokens(n: Int): Long = SUPER_TOKEN_GOLD_K * n.toLong() * n.toLong()
+        /** Lifetime gold at which the [n]-th Super Token is earned: K * n^4 (saturating). */
+        fun goldForSuperTokens(n: Int): Long {
+            if (n <= 0) return 0L
+            val v = SUPER_TOKEN_GOLD_K.toDouble() * n.toDouble().pow(SUPER_TOKEN_ROOT)
+            return if (v >= Long.MAX_VALUE.toDouble()) Long.MAX_VALUE else SUPER_TOKEN_GOLD_K * n.toLong() * n.toLong() * n.toLong() * n.toLong()
+        }
 
         fun prestigeMultiplierFor(spent: Int): Float =
             if (spent <= 0) 1f else 1f + PRESTIGE_COEFF * spent.toDouble().pow(PRESTIGE_EXP).toFloat()
