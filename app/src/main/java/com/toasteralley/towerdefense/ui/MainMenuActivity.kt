@@ -31,6 +31,9 @@ class MainMenuActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btn_play).setOnClickListener {
             startActivity(Intent(this, GameActivity::class.java))
         }
+        findViewById<Button>(R.id.btn_upgrades).setOnClickListener {
+            startActivity(Intent(this, UpgradesActivity::class.java))
+        }
         findViewById<Button>(R.id.btn_store).setOnClickListener { StoreDialog.show(this) }
         findViewById<Button>(R.id.btn_settings).setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
@@ -51,8 +54,12 @@ class MainMenuActivity : AppCompatActivity() {
         AdManager.onResume(adContainer)
         // Pick up purchases made outside the app (e.g. pending purchases that completed).
         app.billing.restorePurchasesAsync()
-        val best = app.settings.bestWave
-        bestWave.text = if (best > 0) getString(R.string.best_wave, best) else ""
+        val p = app.progression
+        val best = p.bestWave
+        val line = StringBuilder()
+        if (best > 0) line.append(getString(R.string.best_wave, best)).append("  ·  ")
+        line.append(getString(R.string.tokens_line, p.tokens, p.superTokensAvailable, p.prestigeMultiplier, p.prestigeKillGoldMultiplier, p.prestigeWaveGoldMultiplier))
+        bestWave.text = line
     }
 
     override fun onPause() {

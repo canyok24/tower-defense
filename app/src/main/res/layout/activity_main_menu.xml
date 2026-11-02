@@ -5,16 +5,22 @@
     android:background="@drawable/menu_background"
     android:orientation="vertical">
 
-    <LinearLayout
+    <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
+        android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
         android:gravity="center"
+        android:paddingVertical="8dp"
         android:orientation="vertical">
 
         <ImageView
-            android:layout_width="72dp"
-            android:layout_height="72dp"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
             android:contentDescription="@null"
             android:src="@drawable/ic_tower" />
 
@@ -47,6 +53,11 @@
             android:text="@string/play" />
 
         <Button
+            android:id="@+id/btn_upgrades"
+            style="@style/MenuButton"
+            android:text="@string/upgrades" />
+
+        <Button
             android:id="@+id/btn_store"
             style="@style/MenuButton"
             android:text="@string/store" />
@@ -56,6 +67,7 @@
             style="@style/MenuButton"
             android:text="@string/settings" />
     </LinearLayout>
+    </ScrollView>
 
     <!-- Banner ad slot; hidden when "remove_ads" is owned. -->
     <FrameLayout

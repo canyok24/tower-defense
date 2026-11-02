@@ -25,7 +25,7 @@ class SettingsActivity : AppCompatActivity() {
             isChecked = settings.soundEnabled
             setOnCheckedChangeListener { _, checked -> settings.soundEnabled = checked }
         }
-        findViewById<Button>(R.id.btn_reset_best).setOnClickListener { settings.bestWave = 0 }
+        findViewById<Button>(R.id.btn_reset_best).setOnClickListener { app.progression.resetBestWave() }
         findViewById<Button>(R.id.btn_restore).setOnClickListener {
             app.billing.restorePurchasesAsync(userInitiated = true)
         }

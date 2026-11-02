@@ -13,8 +13,11 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import android.view.ViewConfiguration
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.floor
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 
@@ -31,11 +34,13 @@ class GameView @JvmOverloads constructor(
     interface Listener {
         fun onOpenStore()
         fun onQuitToMenu()
+        /** Asked before a restart so fresh meta bonuses apply to the new run. */
+        fun currentModifiers(): RunModifiers = RunModifiers.NONE
     }
 
     var listener: Listener? = null
     var engineEvents: GameEngine.Events = GameEngine.Events.NONE
-        set(value) { field = value; engine = GameEngine(value) }
+        set(value) { field = value; engine = GameEngine(value, engine.modifiers) }
 
     var engine = GameEngine(engineEvents)
         private set
@@ -49,6 +54,16 @@ class GameView @JvmOverloads constructor(
     // ------------------------------------------------------------ UI state
     private var buildSelection: TowerType? = null
     private var selectedTower: Tower? = null
+    private var speedMenuOpen = false
+    private var panelScroll = 0f
+
+    // touch tracking (tap on release, drag to scroll the build list)
+    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
+    private var downX = 0f
+    private var downY = 0f
+    private var lastY = 0f
+    private var dragging = false
+    private var canScroll = false
 
     // ------------------------------------------------------------ layout
     private var tile = 1f
@@ -56,24 +71,32 @@ class GameView @JvmOverloads constructor(
     private var mapTop = 0f
     private val hudRect = RectF()
     private val panelRect = RectF()
+    private val listRect = RectF()
+    private var itemH = 1f
     private val pauseBtn = RectF()
     private val speedBtn = RectF()
+    private val speedMenuBtn = RectF()
     private val storeBtn = RectF()
     private val startWaveBtn = RectF()
-    private val towerBtns = TowerType.entries.associateWith { RectF() }
     private val upgradeBtn = RectF()
+    private val upgrade5Btn = RectF()
+    private val upgradeMaxBtn = RectF()
     private val sellBtn = RectF()
     private val closeBtn = RectF()
     private val overlayBtn1 = RectF()
     private val overlayBtn2 = RectF()
     private val overlayBtn3 = RectF()
+    private val speedMenuRect = RectF()
+    private val speedOptionRects = GameEngine.SPEED_OPTIONS.map { RectF() }
 
     // ------------------------------------------------------------ paints
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
     private val tmpRect = RectF()
+    private val itemRect = RectF()
     private val tmpPath = Path()
+    private var animTime = 0f
 
     init {
         holder.addCallback(this)
@@ -118,12 +141,12 @@ class GameView @JvmOverloads constructor(
         val frameNs = 1_000_000_000L / 60
         while (running) {
             val frameStart = System.nanoTime()
-            val dt = ((frameStart - last) / 1e9f).coerceAtMost(0.05f)
+            val dt = (frameStart - last) / 1e9f
             last = frameStart
 
-            synchronized(engine) {
-                repeat(engine.speedMultiplier) { engine.update(dt) }
-            }
+            // Fixed 1/60 s steps; N substeps per frame at Nx speed (capped).
+            synchronized(engine) { engine.advance(dt) }
+            animTime += dt
             drawFrame()
 
             val sleepNs = frameNs - (System.nanoTime() - frameStart)
@@ -167,51 +190,97 @@ class GameView @JvmOverloads constructor(
         val by = (hudH - bh) / 2f
         val bw = hudH * 1.5f
         var x = w - by - bw
-        storeBtn.set(x, by, x + bw, by + bh); x -= bw + by
+        storeBtn.set(x, by, x + bw, by + bh); x -= hudH * 0.7f + by
+        speedMenuBtn.set(x, by, x + hudH * 0.7f, by + bh); x -= bw + by * 0.4f
         speedBtn.set(x, by, x + bw, by + bh); x -= bw + by
         pauseBtn.set(x, by, x + bw, by + bh)
 
-        // Side panel: tower buttons + start-wave button.
+        // Side panel: scrollable tower list + start-wave button.
         val pad = panelW * 0.05f
-        val startH = panelRect.height() * 0.15f
+        val startH = panelRect.height() * 0.13f
         startWaveBtn.set(panelRect.left + pad, panelRect.bottom - pad - startH, panelRect.right - pad, panelRect.bottom - pad)
-        val listTop = panelRect.top + pad
-        val listBottom = startWaveBtn.top - pad
-        val n = TowerType.entries.size
-        val itemH = (listBottom - listTop) / n
-        TowerType.entries.forEachIndexed { i, type ->
-            towerBtns.getValue(type).set(
-                panelRect.left + pad, listTop + i * itemH,
-                panelRect.right - pad, listTop + (i + 1) * itemH - pad * 0.5f
-            )
-        }
-        // Upgrade panel buttons.
-        val btnH = panelRect.height() * 0.13f
-        closeBtn.set(panelRect.left + pad, startWaveBtn.top - pad - btnH, panelRect.right - pad, startWaveBtn.top - pad)
-        sellBtn.set(closeBtn.left, closeBtn.top - pad - btnH, closeBtn.right, closeBtn.top - pad)
-        upgradeBtn.set(closeBtn.left, sellBtn.top - pad - btnH, closeBtn.right, sellBtn.top - pad)
+        listRect.set(panelRect.left + pad, panelRect.top + pad, panelRect.right - pad, startWaveBtn.top - pad)
+        itemH = max(listRect.height() / 6.3f, 1f)
+        clampScroll()
+
+        // Upgrade panel buttons: [+1] / [x5][Max] / [Sell][Close]
+        val btnH = panelRect.height() * 0.095f
+        val gap = pad * 0.6f
+        val half = (listRect.width() - gap) / 2f
+        val row3 = startWaveBtn.top - pad - btnH
+        sellBtn.set(listRect.left, row3, listRect.left + half, row3 + btnH)
+        closeBtn.set(listRect.right - half, row3, listRect.right, row3 + btnH)
+        val row2 = row3 - gap - btnH
+        upgrade5Btn.set(listRect.left, row2, listRect.left + half, row2 + btnH)
+        upgradeMaxBtn.set(listRect.right - half, row2, listRect.right, row2 + btnH)
+        val row1 = row2 - gap - btnH
+        upgradeBtn.set(listRect.left, row1, listRect.right, row1 + btnH)
 
         // Overlay buttons centered.
         val ow = w * 0.3f
-        val oh = h * 0.11f
+        val oh = h * 0.1f
         val ox = (w - ow) / 2f
-        val oy = h * 0.45f
+        val oy = h * 0.5f
         overlayBtn1.set(ox, oy, ox + ow, oy + oh)
         overlayBtn2.set(ox, oy + oh * 1.25f, ox + ow, oy + oh * 2.25f)
         overlayBtn3.set(ox, oy + oh * 2.5f, ox + ow, oy + oh * 3.5f)
+
+        // Speed popup: 4 x 3 grid under the speed button.
+        val cols = 4
+        val rows = (GameEngine.SPEED_OPTIONS.size + cols - 1) / cols
+        val cell = hudH * 0.95f
+        val mw = cols * cell + (cols + 1) * by
+        val mh = rows * cell + (rows + 1) * by
+        val ml = (speedMenuBtn.right - mw).coerceAtLeast(0f)
+        speedMenuRect.set(ml, hudRect.bottom, ml + mw, hudRect.bottom + mh)
+        speedOptionRects.forEachIndexed { i, r ->
+            val cx = i % cols; val cy = i / cols
+            val l = ml + by + cx * (cell + by)
+            val t = hudRect.bottom + by + cy * (cell + by)
+            r.set(l, t, l + cell, t + cell)
+        }
+    }
+
+    private fun maxScroll() = max(0f, TowerType.entries.size * itemH - listRect.height())
+    private fun clampScroll() { panelScroll = panelScroll.coerceIn(0f, maxScroll()) }
+
+    private fun towerItemRect(index: Int, out: RectF): RectF {
+        val top = listRect.top + index * itemH - panelScroll
+        out.set(listRect.left, top, listRect.right, top + itemH - listRect.width() * 0.03f)
+        return out
     }
 
     // ================================================================ input
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.actionMasked != MotionEvent.ACTION_DOWN) return true
         val x = event.x
         val y = event.y
-        var action: (() -> Unit)? = null
-        synchronized(engine) { action = handleTap(x, y) }
-        // UI callbacks run outside the engine lock, on the UI thread.
-        action?.invoke()
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                downX = x; downY = y; lastY = y; dragging = false
+                canScroll = synchronized(engine) {
+                    selectedTower == null && !speedMenuOpen && listRect.contains(x, y) && maxScroll() > 0f
+                }
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (canScroll && (dragging || abs(y - downY) > touchSlop)) {
+                    dragging = true
+                    synchronized(engine) { panelScroll -= y - lastY; clampScroll() }
+                }
+                lastY = y
+            }
+            MotionEvent.ACTION_UP -> {
+                if (!dragging) {
+                    var action: (() -> Unit)? = null
+                    synchronized(engine) { action = handleTap(downX, downY) }
+                    // UI callbacks run outside the engine lock, on the UI thread.
+                    action?.invoke()
+                }
+                dragging = false
+            }
+            MotionEvent.ACTION_CANCEL -> dragging = false
+        }
         return true
     }
 
@@ -230,15 +299,23 @@ class GameView @JvmOverloads constructor(
             when {
                 overlayBtn1.contains(x, y) -> e.paused = false
                 overlayBtn2.contains(x, y) -> restart()
-                overlayBtn3.contains(x, y) -> return { listener?.onQuitToMenu() }
+                overlayBtn3.contains(x, y) -> { e.finishRun(); return { listener?.onQuitToMenu() } }
             }
+            return null
+        }
+        if (speedMenuOpen) {
+            speedOptionRects.forEachIndexed { i, r ->
+                if (r.contains(x, y)) e.speedMultiplier = GameEngine.SPEED_OPTIONS[i]
+            }
+            speedMenuOpen = false
             return null
         }
 
         // HUD.
         when {
             pauseBtn.contains(x, y) -> { e.paused = true; return null }
-            speedBtn.contains(x, y) -> { e.speedMultiplier = if (e.speedMultiplier == 1) 2 else 1; return null }
+            speedBtn.contains(x, y) -> { e.cycleSpeed(); return null }
+            speedMenuBtn.contains(x, y) -> { speedMenuOpen = true; return null }
             storeBtn.contains(x, y) -> { e.paused = true; return { listener?.onOpenStore() } }
         }
 
@@ -248,14 +325,17 @@ class GameView @JvmOverloads constructor(
             val sel = selectedTower
             if (sel != null) {
                 when {
-                    upgradeBtn.contains(x, y) -> e.upgradeTower(sel)
+                    upgradeBtn.contains(x, y) -> e.upgradeTower(sel, 1)
+                    upgrade5Btn.contains(x, y) -> e.upgradeTower(sel, 5)
+                    upgradeMaxBtn.contains(x, y) -> e.upgradeTowerMax(sel)
                     sellBtn.contains(x, y) -> { e.sellTower(sel); selectedTower = null }
                     closeBtn.contains(x, y) -> selectedTower = null
                 }
                 return null
             }
-            for ((type, rect) in towerBtns) {
-                if (rect.contains(x, y)) {
+            if (!listRect.contains(x, y)) return null
+            TowerType.entries.forEachIndexed { i, type ->
+                if (towerItemRect(i, tmpRect).contains(x, y)) {
                     if (!e.isTypeAvailable(type)) {
                         e.showMessage("${type.displayName} is premium - opening Store")
                         e.paused = true
@@ -292,15 +372,29 @@ class GameView @JvmOverloads constructor(
     }
 
     private fun restart() {
+        engine.finishRun()
+        listener?.currentModifiers()?.let { engine.modifiers = it }
         engine.reset()
         selectedTower = null
         buildSelection = null
+        speedMenuOpen = false
     }
 
     /** Called by the activity when entitlements change. */
     fun setPremiumUnlocked(unlocked: Boolean) {
         synchronized(engine) { engine.premiumUnlocked = unlocked }
     }
+
+    /** Applies meta/prestige bonuses and starts a fresh run. */
+    fun startRun(mods: RunModifiers) {
+        synchronized(engine) {
+            engine.modifiers = mods
+            engine.reset()
+        }
+    }
+
+    /** Ends the current run (if anything happened) so Tokens are awarded. */
+    fun finishRun() { synchronized(engine) { engine.finishRun() } }
 
     fun resumeGame() { synchronized(engine) { engine.paused = false } }
 
@@ -314,15 +408,31 @@ class GameView @JvmOverloads constructor(
     private fun render(c: Canvas) {
         if (tile <= 1f) computeLayout(width, height)
         c.drawColor(0xFF1B2A1B.toInt())
+        val e = engine
+        val shaking = e.shakeTimer > 0f && !e.lowFx
+        if (shaking) {
+            val amp = tile * 0.15f * (e.shakeTimer / 0.35f)
+            c.save()
+            c.translate(sin(animTime * 97f) * amp, cos(animTime * 83f) * amp)
+        }
         drawMap(c)
         drawTowers(c)
         drawEnemies(c)
+        drawBeams(c)
         drawProjectiles(c)
         drawEffects(c)
         drawSelection(c)
+        if (shaking) c.restore()
+        if (e.flashTimer > 0f && !e.lowFx) {
+            val a = ((e.flashTimer / 0.12f) * 110).toInt().coerceIn(0, 110)
+            fill.color = (a shl 24) or 0xFFFFFF
+            c.drawRect(0f, hudRect.bottom, panelRect.left, height.toFloat(), fill)
+        }
         drawHud(c)
         drawPanel(c)
         drawMessage(c)
+        drawBanner(c)
+        if (speedMenuOpen) drawSpeedMenu(c)
         drawOverlay(c)
     }
 
@@ -360,60 +470,163 @@ class GameView @JvmOverloads constructor(
         }
     }
 
-    private fun drawTowerShape(c: Canvas, type: TowerType, cx: Float, cy: Float, size: Float, angle: Float, level: Int) {
+    private fun polygon(cx: Float, cy: Float, radius: Float, sides: Int, rotation: Float = 0f) {
+        tmpPath.reset()
+        for (i in 0 until sides) {
+            val a = rotation + (2 * Math.PI / sides * i).toFloat()
+            val px = cx + cos(a) * radius; val py = cy + sin(a) * radius
+            if (i == 0) tmpPath.moveTo(px, py) else tmpPath.lineTo(px, py)
+        }
+        tmpPath.close()
+    }
+
+    private fun star(cx: Float, cy: Float, outer: Float, inner: Float, points: Int) {
+        tmpPath.reset()
+        for (i in 0 until points * 2) {
+            val a = (-Math.PI / 2 + Math.PI / points * i).toFloat()
+            val r = if (i % 2 == 0) outer else inner
+            val px = cx + cos(a) * r; val py = cy + sin(a) * r
+            if (i == 0) tmpPath.moveTo(px, py) else tmpPath.lineTo(px, py)
+        }
+        tmpPath.close()
+    }
+
+    private fun barrel(c: Canvas, cx: Float, cy: Float, angle: Float, len: Float, width: Float, color: Int = 0xFF263238.toInt(), offset: Float = 0f) {
+        stroke.color = color
+        stroke.strokeWidth = width
+        stroke.strokeCap = Paint.Cap.ROUND
+        val ox = -sin(angle) * offset; val oy = cos(angle) * offset
+        c.drawLine(cx + ox, cy + oy, cx + ox + cos(angle) * len, cy + oy + sin(angle) * len, stroke)
+        stroke.strokeCap = Paint.Cap.BUTT
+    }
+
+    private fun drawTowerShape(c: Canvas, type: TowerType, cx: Float, cy: Float, size: Float, angle: Float, level: Int, active: Boolean = false) {
         // Base.
         fill.color = 0xFF37474F.toInt()
         tmpRect.set(cx - size * 0.42f, cy - size * 0.42f, cx + size * 0.42f, cy + size * 0.42f)
         c.drawRoundRect(tmpRect, size * 0.1f, size * 0.1f, fill)
-        // Body.
+        if (level >= 10) {
+            stroke.color = if (level >= 20) 0xFFFFD54F.toInt() else 0xFFB0BEC5.toInt()
+            stroke.strokeWidth = size * 0.04f
+            c.drawRoundRect(tmpRect, size * 0.1f, size * 0.1f, stroke)
+        }
         fill.color = type.color
         when (type) {
-            TowerType.ARROW -> c.drawCircle(cx, cy, size * 0.28f, fill)
-            TowerType.CANNON -> c.drawCircle(cx, cy, size * 0.33f, fill)
+            TowerType.ARROW -> {
+                c.drawCircle(cx, cy, size * 0.28f, fill)
+                barrel(c, cx, cy, angle, size * 0.36f, size * 0.09f)
+            }
+            TowerType.CANNON -> {
+                c.drawCircle(cx, cy, size * 0.33f, fill)
+                barrel(c, cx, cy, angle, size * 0.38f, size * 0.16f)
+            }
             TowerType.FROST -> {
-                tmpPath.reset()
-                for (i in 0 until 6) {
-                    val a = (Math.PI / 3 * i).toFloat()
-                    val px = cx + cos(a) * size * 0.32f; val py = cy + sin(a) * size * 0.32f
-                    if (i == 0) tmpPath.moveTo(px, py) else tmpPath.lineTo(px, py)
+                polygon(cx, cy, size * 0.32f, 6); c.drawPath(tmpPath, fill)
+                barrel(c, cx, cy, angle, size * 0.34f, size * 0.08f, 0xFFE1F5FE.toInt())
+            }
+            TowerType.SLOW -> {
+                // Goo blob with drips.
+                c.drawCircle(cx, cy, size * 0.26f, fill)
+                for (i in 0 until 3) {
+                    val a = (Math.PI / 2 + i * 2 * Math.PI / 3).toFloat()
+                    c.drawCircle(cx + cos(a) * size * 0.24f, cy + sin(a) * size * 0.24f, size * 0.09f, fill)
                 }
-                tmpPath.close(); c.drawPath(tmpPath, fill)
+                barrel(c, cx, cy, angle, size * 0.3f, size * 0.14f, 0xFF004D40.toInt())
+            }
+            TowerType.RAPID -> {
+                polygon(cx, cy, size * 0.3f, 3, angle); c.drawPath(tmpPath, fill)
+                for (o in listOf(-0.1f, 0f, 0.1f)) barrel(c, cx, cy, angle, size * 0.4f, size * 0.05f, offset = o * size)
+            }
+            TowerType.HEAVY -> {
+                polygon(cx, cy, size * 0.36f, 8, (Math.PI / 8).toFloat()); c.drawPath(tmpPath, fill)
+                barrel(c, cx, cy, angle, size * 0.42f, size * 0.2f, 0xFF3E2723.toInt())
+            }
+            TowerType.DISRUPTOR -> {
+                c.drawCircle(cx, cy, size * 0.18f, fill)
+                stroke.color = type.color; stroke.strokeWidth = size * 0.05f
+                val pulse = if (active) 1.15f else 1f
+                c.drawCircle(cx, cy, size * 0.27f * pulse, stroke)
+                c.drawCircle(cx, cy, size * 0.36f * pulse, stroke)
+                fill.color = 0xFFFFEB3B.toInt()
+                c.drawCircle(cx, cy, size * 0.07f, fill)
             }
             TowerType.SNIPER -> {
                 tmpRect.set(cx - size * 0.26f, cy - size * 0.26f, cx + size * 0.26f, cy + size * 0.26f)
                 c.drawRect(tmpRect, fill)
+                barrel(c, cx, cy, angle, size * 0.5f, size * 0.09f)
+            }
+            TowerType.RAILGUN -> {
+                // Dark housing with two parallel cyan rails.
+                fill.color = 0xFF263238.toInt(); c.drawCircle(cx, cy, size * 0.3f, fill)
+                barrel(c, cx, cy, angle, size * 0.46f, size * 0.07f, type.color, size * 0.09f)
+                barrel(c, cx, cy, angle, size * 0.46f, size * 0.07f, type.color, -size * 0.09f)
+                fill.color = type.color; c.drawCircle(cx, cy, size * 0.11f, fill)
             }
             TowerType.LASER -> {
                 tmpPath.reset()
                 tmpPath.moveTo(cx, cy - size * 0.34f); tmpPath.lineTo(cx + size * 0.34f, cy)
                 tmpPath.lineTo(cx, cy + size * 0.34f); tmpPath.lineTo(cx - size * 0.34f, cy); tmpPath.close()
                 c.drawPath(tmpPath, fill)
+                barrel(c, cx, cy, angle, size * 0.3f, size * 0.1f, 0xFF4A0000.toInt())
+                fill.color = if (active) Color.WHITE else 0xFFFFCDD2.toInt()
+                c.drawCircle(cx, cy, size * 0.1f, fill)
+            }
+            TowerType.ANNIHILATOR -> {
+                star(cx, cy, size * 0.4f, size * 0.2f, 6); c.drawPath(tmpPath, fill)
+                barrel(c, cx, cy, angle, size * 0.46f, size * 0.24f, 0xFF1A1A1A.toInt())
+                fill.color = 0xFFFF6E40.toInt(); c.drawCircle(cx, cy, size * 0.1f, fill)
             }
         }
-        // Barrel.
-        val len = when (type) { TowerType.SNIPER -> 0.5f; TowerType.CANNON -> 0.38f; else -> 0.36f } * size
-        stroke.color = 0xFF263238.toInt()
-        stroke.strokeWidth = size * if (type == TowerType.CANNON) 0.16f else 0.09f
-        stroke.strokeCap = Paint.Cap.ROUND
-        c.drawLine(cx, cy, cx + cos(angle) * len, cy + sin(angle) * len, stroke)
-        stroke.strokeCap = Paint.Cap.BUTT
-        // Level pips.
-        fill.color = 0xFFFFD54F.toInt()
-        for (i in 0 until level) {
-            c.drawCircle(cx - size * 0.3f + i * size * 0.2f, cy + size * 0.36f, size * 0.05f, fill)
+        // Level badge.
+        if (level > 1) {
+            text.textAlign = Paint.Align.CENTER
+            text.textSize = size * 0.24f
+            fill.color = 0xCC000000.toInt()
+            val bx = cx + size * 0.3f; val by = cy + size * 0.3f
+            c.drawCircle(bx, by, size * 0.15f, fill)
+            text.color = if (level >= 20) 0xFFFFD54F.toInt() else Color.WHITE
+            c.drawText(level.toString(), bx, by - (text.ascent() + text.descent()) / 2f, text)
+            text.color = Color.WHITE
         }
     }
 
     private fun drawTowers(c: Canvas) {
         for (t in engine.towers) {
-            drawTowerShape(c, t.type, sx(t.x), sy(t.y), tile, t.angle, t.level)
+            val active = t.beamTargets.isNotEmpty() || t.pulseTimer > 0f
+            drawTowerShape(c, t.type, sx(t.x), sy(t.y), tile, t.angle, t.level, active)
             if (t.beamTimer > 0f) {
-                stroke.color = t.type.color; stroke.strokeWidth = tile * 0.08f
+                // Railgun slug trail.
+                stroke.color = t.type.color; stroke.strokeWidth = tile * 0.1f
                 c.drawLine(sx(t.x), sy(t.y), sx(t.beamX), sy(t.beamY), stroke)
-                stroke.color = Color.WHITE; stroke.strokeWidth = tile * 0.03f
+                stroke.color = Color.WHITE; stroke.strokeWidth = tile * 0.035f
                 c.drawLine(sx(t.x), sy(t.y), sx(t.beamX), sy(t.beamY), stroke)
             }
         }
+    }
+
+    /** Laser beams: drawn every frame from the tower's current beam targets. */
+    private fun drawBeams(c: Canvas) {
+        stroke.strokeCap = Paint.Cap.ROUND
+        for (t in engine.towers) {
+            val targets = t.beamTargets
+            if (targets.isEmpty()) continue
+            val main = targets[0]
+            val flicker = 0.85f + 0.15f * sin(animTime * 40f + t.col)
+            // Branches first (thinner, dimmer), from the main target.
+            for (i in 1 until targets.size) {
+                val b = targets[i]
+                stroke.color = (0x88 shl 24) or (t.type.color and 0xFFFFFF)
+                stroke.strokeWidth = tile * 0.05f
+                c.drawLine(sx(main.x), sy(main.y), sx(b.x), sy(b.y), stroke)
+                stroke.color = 0x66FFFFFF; stroke.strokeWidth = tile * 0.015f
+                c.drawLine(sx(main.x), sy(main.y), sx(b.x), sy(b.y), stroke)
+            }
+            stroke.color = t.type.color; stroke.strokeWidth = tile * 0.12f * flicker
+            c.drawLine(sx(t.x), sy(t.y), sx(main.x), sy(main.y), stroke)
+            stroke.color = Color.WHITE; stroke.strokeWidth = tile * 0.04f
+            c.drawLine(sx(t.x), sy(t.y), sx(main.x), sy(main.y), stroke)
+        }
+        stroke.strokeCap = Paint.Cap.BUTT
     }
 
     private fun drawEnemies(c: Canvas) {
@@ -441,11 +654,21 @@ class GameView @JvmOverloads constructor(
                 stroke.color = 0xFF81D4FA.toInt(); stroke.strokeWidth = tile * 0.05f
                 c.drawCircle(cx, cy, r * 1.25f, stroke)
             }
+            if (e.isStunned) {
+                // Orbiting yellow sparks = stunned.
+                fill.color = 0xFFFFEB3B.toInt()
+                for (i in 0 until 3) {
+                    val a = animTime * 6f + i * 2.094f
+                    c.drawCircle(cx + cos(a) * r * 0.9f, cy - r * 1.1f + sin(a) * r * 0.3f, tile * 0.05f, fill)
+                }
+                stroke.color = 0xAAFFEB3B.toInt(); stroke.strokeWidth = tile * 0.03f
+                c.drawCircle(cx, cy, r * 1.4f, stroke)
+            }
             // HP bar.
             val bw = tile * 0.7f; val bh = tile * 0.08f
             val top = cy - r - bh * 2.5f
             fill.color = 0xCC000000.toInt(); c.drawRect(cx - bw / 2, top, cx + bw / 2, top + bh, fill)
-            val frac = (e.hp / e.maxHp).coerceIn(0f, 1f)
+            val frac = (e.hp / e.maxHp).toFloat().coerceIn(0f, 1f)
             fill.color = when { frac > 0.6f -> 0xFF66BB6A.toInt(); frac > 0.3f -> 0xFFFFCA28.toInt(); else -> 0xFFEF5350.toInt() }
             c.drawRect(cx - bw / 2, top, cx - bw / 2 + bw * frac, top + bh, fill)
         }
@@ -454,7 +677,17 @@ class GameView @JvmOverloads constructor(
     private fun drawProjectiles(c: Canvas) {
         for (p in engine.projectiles) {
             fill.color = p.color
-            c.drawCircle(sx(p.x), sy(p.y), tile * if (p.splashRadius > 0f) 0.12f else 0.08f, fill)
+            val r = when (p.source) {
+                TowerType.ANNIHILATOR -> 0.2f
+                TowerType.HEAVY -> 0.14f
+                TowerType.SLOW -> 0.12f
+                TowerType.RAPID -> 0.05f
+                else -> if (p.splashRadius > 0f) 0.12f else 0.08f
+            }
+            c.drawCircle(sx(p.x), sy(p.y), tile * r, fill)
+            if (p.source == TowerType.ANNIHILATOR) {
+                fill.color = 0xFFFFE0B2.toInt(); c.drawCircle(sx(p.x), sy(p.y), tile * 0.09f, fill)
+            }
         }
     }
 
@@ -466,6 +699,23 @@ class GameView @JvmOverloads constructor(
                     stroke.color = (fx.color and 0x00FFFFFF) or (a shl 24)
                     stroke.strokeWidth = tile * 0.08f
                     c.drawCircle(sx(fx.x), sy(fx.y), fx.radius * tile * (0.4f + 0.6f * fx.progress), stroke)
+                }
+                Effect.Kind.PULSE -> {
+                    fill.color = (fx.color and 0x00FFFFFF) or ((a / 5) shl 24)
+                    c.drawCircle(sx(fx.x), sy(fx.y), fx.radius * tile * fx.progress, fill)
+                    stroke.color = (fx.color and 0x00FFFFFF) or (a shl 24)
+                    stroke.strokeWidth = tile * 0.06f
+                    c.drawCircle(sx(fx.x), sy(fx.y), fx.radius * tile * fx.progress, stroke)
+                }
+                Effect.Kind.BLAST -> {
+                    val rr = fx.radius * tile * (0.3f + 0.9f * fx.progress)
+                    fill.color = (0xFFFF8A65.toInt() and 0x00FFFFFF) or ((a * 2 / 3) shl 24)
+                    c.drawCircle(sx(fx.x), sy(fx.y), rr, fill)
+                    fill.color = (0xFFFFF3E0.toInt() and 0x00FFFFFF) or (a shl 24)
+                    c.drawCircle(sx(fx.x), sy(fx.y), rr * 0.45f * (1f - fx.progress), fill)
+                    stroke.color = (fx.color and 0x00FFFFFF) or (a shl 24)
+                    stroke.strokeWidth = tile * 0.12f
+                    c.drawCircle(sx(fx.x), sy(fx.y), rr * 1.1f, stroke)
                 }
                 Effect.Kind.TEXT -> {
                     text.color = (fx.color and 0x00FFFFFF) or (a shl 24)
@@ -506,15 +756,45 @@ class GameView @JvmOverloads constructor(
         fill.color = 0xFF102027.toInt()
         c.drawRect(hudRect, fill)
         text.textAlign = Paint.Align.LEFT
-        text.textSize = hudRect.height() * 0.42f
+        val parts = listOf(
+            "Gold ${GoldFormat.compact(e.gold)}" to 0xFFFFD54F.toInt(),
+            "Lives ${e.lives}" to 0xFFEF5350.toInt(),
+            (if (e.milestoneReached) "Wave ${e.wave} ∞" else "Wave ${e.wave}") to Color.WHITE,
+            "Prestige dmg ×%.2f · kill ×%.2f · wave ×%.2f".format(
+                e.modifiers.prestigeMult, e.modifiers.prestigeKillGoldMult, e.modifiers.prestigeWaveGoldMult
+            ) to 0xFFFFAB40.toInt(),
+        )
+        val avail = pauseBtn.left - hudRect.height() * 0.5f
+        val gap = hudRect.height() * 0.45f
+        text.textSize = hudRect.height() * 0.4f
+        while (parts.sumOf { text.measureText(it.first).toDouble() } + gap * parts.size > avail && text.textSize > 8f) {
+            text.textSize *= 0.92f
+        }
         val baseline = hudRect.centerY() - (text.ascent() + text.descent()) / 2f
         var x = hudRect.height() * 0.3f
-        text.color = 0xFFFFD54F.toInt(); val g = "Gold ${e.gold}"; c.drawText(g, x, baseline, text); x += text.measureText(g) + hudRect.height() * 0.6f
-        text.color = 0xFFEF5350.toInt(); val l = "Lives ${e.lives}"; c.drawText(l, x, baseline, text); x += text.measureText(l) + hudRect.height() * 0.6f
-        text.color = Color.WHITE; c.drawText("Wave ${e.wave}/${e.totalWaves}", x, baseline, text)
+        for ((s, col) in parts) {
+            text.color = col
+            c.drawText(s, x, baseline, text)
+            x += text.measureText(s) + gap
+        }
+        text.color = Color.WHITE
         drawButton(c, pauseBtn, if (e.paused) "▶" else "II", 0xFF455A64.toInt())
-        drawButton(c, speedBtn, "${e.speedMultiplier}x", if (e.speedMultiplier > 1) 0xFFEF6C00.toInt() else 0xFF455A64.toInt())
+        val spd = e.speedMultiplier
+        drawButton(c, speedBtn, "${spd}x", if (spd > 1) 0xFFEF6C00.toInt() else 0xFF455A64.toInt())
+        drawButton(c, speedMenuBtn, "▾", 0xFF37474F.toInt())
         drawButton(c, storeBtn, "Store", 0xFF6A1B9A.toInt())
+    }
+
+    private fun drawSpeedMenu(c: Canvas) {
+        fill.color = 0xF0102027.toInt()
+        c.drawRoundRect(speedMenuRect, 16f, 16f, fill)
+        stroke.color = 0xFFEF6C00.toInt(); stroke.strokeWidth = 3f
+        c.drawRoundRect(speedMenuRect, 16f, 16f, stroke)
+        speedOptionRects.forEachIndexed { i, r ->
+            val s = GameEngine.SPEED_OPTIONS[i]
+            val sel = s == engine.speedMultiplier
+            drawButton(c, r, "${s}x", if (sel) 0xFFEF6C00.toInt() else 0xFF455A64.toInt())
+        }
     }
 
     private fun drawPanel(c: Canvas) {
@@ -534,7 +814,12 @@ class GameView @JvmOverloads constructor(
 
     private fun drawBuildPanel(c: Canvas) {
         val e = engine
-        for ((type, r) in towerBtns) {
+        c.save()
+        c.clipRect(listRect)
+        val r = itemRect
+        TowerType.entries.forEachIndexed { i, type ->
+            towerItemRect(i, r)
+            if (r.bottom < listRect.top || r.top > listRect.bottom) return@forEachIndexed
             val available = e.isTypeAvailable(type)
             val selected = buildSelection == type
             fill.color = when { selected -> 0xFF00695C.toInt(); available -> 0xFF263238.toInt(); else -> 0xFF212121.toInt() }
@@ -549,46 +834,123 @@ class GameView @JvmOverloads constructor(
             text.textAlign = Paint.Align.LEFT
             text.textSize = r.height() * 0.3f
             text.color = if (available) Color.WHITE else 0xFF9E9E9E.toInt()
-            c.drawText(type.displayName, tx, r.top + r.height() * 0.42f, text)
-            text.textSize = r.height() * 0.26f
+            c.drawText(type.displayName, tx, r.top + r.height() * 0.38f, text)
+            text.textSize = r.height() * 0.22f
             text.color = when {
                 !available -> 0xFFCE93D8.toInt()
                 e.gold >= type.cost -> 0xFFFFD54F.toInt()
                 else -> 0xFFE57373.toInt()
             }
-            c.drawText(if (available) "${type.cost}g" else "\uD83D\uDD12 Premium", tx, r.top + r.height() * 0.8f, text)
+            val sub = if (available) "${type.cost}g · ${type.role}" else "\uD83D\uDD12 Premium · ${type.role}"
+            c.drawText(sub, tx, r.top + r.height() * 0.75f, text)
+        }
+        c.restore()
+        // Scrollbar.
+        val ms = maxScroll()
+        if (ms > 0f) {
+            val trackH = listRect.height()
+            val thumbH = trackH * listRect.height() / (listRect.height() + ms)
+            val thumbTop = listRect.top + (trackH - thumbH) * (panelScroll / ms)
+            fill.color = 0x88B0BEC5.toInt()
+            val bx = panelRect.right - listRect.width() * 0.025f
+            tmpRect.set(bx - 3f, thumbTop, bx + 3f, thumbTop + thumbH)
+            c.drawRoundRect(tmpRect, 3f, 3f, fill)
         }
         text.color = Color.WHITE
     }
 
+    private fun fmtRate(s: TowerStats, type: TowerType): String = when (type.attack) {
+        Attack.BEAM -> "continuous"
+        Attack.PULSE -> "every %.1fs".format(s.stunCooldown)
+        else -> if (s.fireRate < 1f) "%.2f/s (%.1fs)".format(s.fireRate, 1f / s.fireRate) else "%.2f/s".format(s.fireRate)
+    }
+
+    /** Stat rows (label, value) for a tower at given stats. */
+    private fun statRows(type: TowerType, s: TowerStats): List<Pair<String, String>> {
+        val rows = ArrayList<Pair<String, String>>()
+        when (type.attack) {
+            Attack.PULSE -> {}
+            Attack.BEAM -> rows += "DPS" to "%.0f".format(s.damage)
+            else -> rows += "Dmg" to "%.0f".format(s.damage)
+        }
+        rows += "Rng" to "%.2f".format(s.range)
+        rows += "Rate" to fmtRate(s, type)
+        if (s.splashRadius > 0f) rows += "Splash" to "%.2f".format(s.splashRadius)
+        if (s.slowFactor < 1f) rows += "Slow" to "%.0f%% %.1fs".format((1f - s.slowFactor) * 100f, s.slowDuration)
+        if (type.attack == Attack.PULSE) rows += "Stun" to "%.2fs".format(s.stunDuration)
+        if (type.attack == Attack.BEAM) rows += "Beams" to "%d @ %.0f%%".format(s.beamTargets, s.beamSecondary * 100f)
+        if (s.bossBonus > 1f) rows += "Boss" to "x%.2f".format(s.bossBonus)
+        return rows
+    }
+
     private fun drawUpgradePanel(c: Canvas, t: Tower) {
         val e = engine
-        val pad = panelRect.width() * 0.07f
+        val pad = panelRect.width() * 0.06f
+        val left = panelRect.left + pad
         var y = panelRect.top + pad
         text.textAlign = Paint.Align.LEFT
-        val big = panelRect.height() * 0.065f
-        val small = panelRect.height() * 0.045f
+        val big = panelRect.height() * 0.055f
         text.textSize = big; text.color = t.type.color
-        y += big; c.drawText("${t.type.displayName}  Lv ${t.level}", panelRect.left + pad, y, text)
-        text.textSize = small; text.color = Color.WHITE
-        val next = if (t.isMaxLevel) null else t.level + 1
-        fun line(label: String, cur: Float, nxt: Float?, fmt: String) {
-            y += small * 1.45f
-            val s = if (nxt != null) "$label ${fmt.format(cur)} → ${fmt.format(nxt)}" else "$label ${fmt.format(cur)}"
-            c.drawText(s, panelRect.left + pad, y, text)
+        y += big; c.drawText(t.type.displayName, left, y, text)
+        val small = panelRect.height() * 0.037f
+        text.textSize = small; text.color = 0xFFFFD54F.toInt()
+        y += small * 1.4f; c.drawText("Level ${t.level}/${Tower.MAX_LEVEL}", left, y, text)
+
+        val cur = statRows(t.type, t.stats)
+        val nxt = if (t.isMaxLevel) null else statRows(t.type, t.statsAt(t.level + 1))
+        text.color = Color.WHITE
+        val maxW = panelRect.width() - pad * 2
+        val lineH = small * 1.32f
+        val bottomLimit = upgradeBtn.top - small * 1.6f
+        for ((i, row) in cur.withIndex()) {
+            if (y + lineH > bottomLimit) break
+            y += lineH
+            val n = nxt?.getOrNull(i)?.second
+            val s = if (n != null && n != row.second) "${row.first} ${row.second} → $n" else "${row.first} ${row.second}"
+            text.textSize = small
+            while (text.measureText(s) > maxW && text.textSize > 8f) text.textSize *= 0.92f
+            c.drawText(s, left, y, text)
         }
-        line("Dmg", t.damage, next?.let { t.statsDamage(it) }, "%.0f")
-        line("Rng", t.range, next?.let { t.statsRange(it) }, "%.1f")
-        line("Rate", t.fireRate, next?.let { t.statsRate(it) }, "%.2f")
-        y += small * 1.45f
+        text.textSize = small
         text.color = 0xFFB0BEC5.toInt()
-        c.drawText("Invested ${t.invested}g", panelRect.left + pad, y, text)
+        c.drawText("Invested ${t.invested}g", left, upgradeBtn.top - small * 0.6f, text)
         text.color = Color.WHITE
 
-        if (t.isMaxLevel) drawButton(c, upgradeBtn, "MAX LEVEL", 0xFF555555.toInt(), false, 0.34f)
-        else drawButton(c, upgradeBtn, "Upgrade ${t.upgradeCost}g", 0xFF1565C0.toInt(), e.gold >= t.upgradeCost, 0.34f)
+        if (t.isMaxLevel) {
+            drawButton(c, upgradeBtn, "MAX LEVEL", 0xFF555555.toInt(), false, 0.34f)
+            drawButton(c, upgrade5Btn, "x5", 0xFF555555.toInt(), false, 0.34f)
+            drawButton(c, upgradeMaxBtn, "Max", 0xFF555555.toInt(), false, 0.34f)
+        } else {
+            val c1 = t.upgradeCost
+            drawButton(c, upgradeBtn, "Upgrade → L${t.level + 1}  ${GoldFormat.compact(c1.toLong())}g", 0xFF1565C0.toInt(), e.gold >= c1, 0.34f)
+            val n5 = min(5, Tower.MAX_LEVEL - t.level)
+            val c5 = t.bulkCost(n5)
+            drawButton(c, upgrade5Btn, "x$n5 ${GoldFormat.compact(c5.toLong())}g", 0xFF0D47A1.toInt(), e.gold >= c5, 0.34f)
+            val nMax = t.maxAffordable(e.gold)
+            val cMax = t.bulkCost(nMax)
+            drawButton(c, upgradeMaxBtn, if (nMax > 0) "Max +$nMax ${GoldFormat.compact(cMax.toLong())}g" else "Max", 0xFF0D47A1.toInt(), nMax > 0, 0.34f)
+        }
         drawButton(c, sellBtn, "Sell +${t.sellValue}g", 0xFFC62828.toInt(), true, 0.34f)
         drawButton(c, closeBtn, "Close", 0xFF455A64.toInt(), true, 0.34f)
+    }
+
+    /** Victory-milestone / wave-milestone banner; the game keeps running. */
+    private fun drawBanner(c: Canvas) {
+        val msg = engine.bannerText ?: return
+        val alpha = (engine.bannerTimer / 0.5f).coerceIn(0f, 1f)
+        text.textAlign = Paint.Align.CENTER
+        text.textSize = height * 0.075f
+        while (text.measureText(msg) > panelRect.left * 0.85f && text.textSize > 10f) text.textSize *= 0.92f
+        val cx = panelRect.left / 2f
+        val cy = (hudRect.bottom + height) / 2f
+        val h = text.textSize * 1.8f
+        val half = min(panelRect.left * 0.48f, text.measureText(msg) / 2f + h)
+        tmpRect.set(cx - half, cy - h / 2, cx + half, cy + h / 2)
+        fill.color = Color.argb((200 * alpha).toInt(), 40, 20, 0)
+        c.drawRoundRect(tmpRect, 18f, 18f, fill)
+        text.color = Color.argb((255 * alpha).toInt(), 255, 213, 79)
+        c.drawText(msg, cx, cy - (text.ascent() + text.descent()) / 2f, text)
+        text.color = Color.WHITE
     }
 
     private fun drawMessage(c: Canvas) {
@@ -610,22 +972,35 @@ class GameView @JvmOverloads constructor(
         val title: String
         val subtitle: String
         when {
-            e.state == GameEngine.State.GAME_OVER -> { title = "Game Over"; subtitle = "You survived ${e.wave - 1} of ${e.totalWaves} waves" }
-            e.state == GameEngine.State.VICTORY -> { title = "Victory!"; subtitle = "All ${e.totalWaves} waves defeated with ${e.lives} lives left" }
-            e.paused -> { title = "Paused"; subtitle = "Wave ${e.wave}/${e.totalWaves} · ${e.gold} gold" }
+            e.state == GameEngine.State.GAME_OVER && e.milestoneReached -> {
+                title = "Victory! Run over"
+                subtitle = "Wave ${WaveDefinitions.MILESTONE_WAVE} milestone reached · endless run ended after ${e.wavesCleared} waves"
+            }
+            e.state == GameEngine.State.GAME_OVER -> { title = "Game Over"; subtitle = "You cleared ${e.wavesCleared} waves" }
+            e.paused -> { title = "Paused"; subtitle = "Wave ${e.wave} · ${GoldFormat.compact(e.gold)} gold · ${e.speedMultiplier}x" }
             else -> return
         }
         c.drawColor(0xB0000000.toInt())
         text.textAlign = Paint.Align.CENTER
         text.textSize = height * 0.12f
-        text.color = when (e.state) {
-            GameEngine.State.VICTORY -> 0xFFFFD54F.toInt()
-            GameEngine.State.GAME_OVER -> 0xFFEF5350.toInt()
+        text.color = when {
+            e.state == GameEngine.State.GAME_OVER && e.milestoneReached -> 0xFFFFD54F.toInt()
+            e.state == GameEngine.State.GAME_OVER -> 0xFFEF5350.toInt()
             else -> Color.WHITE
         }
-        c.drawText(title, width / 2f, height * 0.27f, text)
+        c.drawText(title, width / 2f, height * 0.25f, text)
         text.textSize = height * 0.045f; text.color = 0xFFCFD8DC.toInt()
-        c.drawText(subtitle, width / 2f, height * 0.36f, text)
+        c.drawText(subtitle, width / 2f, height * 0.33f, text)
+        val result = e.runResult
+        if (result != null) {
+            text.textSize = height * 0.06f; text.color = 0xFF80DEEA.toInt()
+            c.drawText("+${result.tokens} Tokens earned", width / 2f, height * 0.41f, text)
+            text.textSize = height * 0.036f; text.color = 0xFFB0BEC5.toInt()
+            c.drawText(
+                "Kills ${result.kills} · Bosses ${result.bossKills} · Gold earned ${GoldFormat.compact(result.goldEarned)} · spend Tokens in Upgrades",
+                width / 2f, height * 0.465f, text
+            )
+        }
         text.color = Color.WHITE
         if (e.isRunning) {
             drawButton(c, overlayBtn1, "Resume", 0xFF2E7D32.toInt())

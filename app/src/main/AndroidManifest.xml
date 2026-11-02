@@ -42,6 +42,11 @@
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize" />
 
         <activity
+            android:name=".ui.UpgradesActivity"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape" />
+
+        <activity
             android:name=".ui.SettingsActivity"
             android:exported="false"
             android:screenOrientation="sensorLandscape" />

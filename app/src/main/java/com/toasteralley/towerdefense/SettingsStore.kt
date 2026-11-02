@@ -1,16 +1,15 @@
 package com.toasteralley.towerdefense
 
 import android.content.Context
-import androidx.core.content.edit
+import com.toasteralley.towerdefense.meta.KeyValueStore
+import com.toasteralley.towerdefense.meta.PrefsKeyValueStore
 
-class SettingsStore(context: Context) {
-    private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+/** User settings. Never touched by a prestige reset. */
+class SettingsStore(private val prefs: KeyValueStore) {
+    constructor(context: Context) :
+        this(PrefsKeyValueStore(context.getSharedPreferences("settings", Context.MODE_PRIVATE)))
 
     var soundEnabled: Boolean
         get() = prefs.getBoolean("sound", true)
-        set(value) = prefs.edit { putBoolean("sound", value) }
-
-    var bestWave: Int
-        get() = prefs.getInt("best_wave", 0)
-        set(value) = prefs.edit { putInt("best_wave", value) }
+        set(value) = prefs.putBoolean("sound", value)
 }
