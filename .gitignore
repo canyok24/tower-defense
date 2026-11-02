@@ -28,3 +28,25 @@ google-services.json
 
 # Logs
 *.log
+
+# From GitHub template
+# Gradle files
+.kotlin/
+
+# Local configuration file (sdk path, etc)
+
+# Log/OS Files
+
+# Android Studio generated files and folders
+
+# IntelliJ
+misc.xml
+deploymentTargetDropDown.xml
+render.experimental.xml
+
+# Keystore files
+
+# Google Services (e.g. APIs or Firebase)
+
+# Android Profiling
+*.hprof
