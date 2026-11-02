@@ -15,9 +15,10 @@ import com.android.billingclient.api.ProductDetails
 import com.android.billingclient.api.Purchase
 import com.android.billingclient.api.PurchasesUpdatedListener
 import com.android.billingclient.api.QueryProductDetailsParams
+import com.android.billingclient.api.QueryProductDetailsResult
 import com.android.billingclient.api.QueryPurchasesParams
+import com.android.billingclient.api.UnfetchedProduct
 import com.android.billingclient.api.acknowledgePurchase
-import com.android.billingclient.api.queryProductDetails
 import com.android.billingclient.api.queryPurchasesAsync
 import com.toasteralley.towerdefense.BuildConfig
 import kotlinx.coroutines.CoroutineScope
@@ -30,9 +31,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
 /**
- * Google Play Billing (Play Billing Library 7, billing-ktx) wrapper.
+ * Google Play Billing (Play Billing Library 8, billing-ktx) wrapper.
+ *
+ * PBL 8 notes: pending purchases are enabled via [PendingPurchasesParams]
+ * (one-time products), the client reconnects automatically
+ * ([BillingClient.Builder.enableAutoServiceReconnection]), product queries return
+ * [QueryProductDetailsResult] (fetched + unfetched products), and owned items are
+ * restored with queryPurchasesAsync (queryPurchaseHistory was removed in PBL 8).
  *
  * Responsibilities:
  *  - connect to Play (with exponential-backoff reconnects)
@@ -63,9 +72,13 @@ class BillingManager(
 
     private val billingClient: BillingClient = BillingClient.newBuilder(appContext)
         .setListener(this)
+        // Required in PBL 8: one-time-product pending purchases are opt-in via params.
         .enablePendingPurchases(
             PendingPurchasesParams.newBuilder().enableOneTimeProducts().build()
         )
+        // PBL 8: the library re-establishes a lost connection automatically when an
+        // API call is made, so we only need a manual retry for the initial setup.
+        .enableAutoServiceReconnection()
         .build()
 
     private var purchased = store.loadPurchased()
@@ -119,6 +132,8 @@ class BillingManager(
     }
 
     override fun onBillingServiceDisconnected() {
+        // With enableAutoServiceReconnection() the next API call reconnects for us;
+        // we still schedule a backed-off reconnect so prices/purchases refresh.
         Log.d(TAG, "Billing service disconnected")
         _connection.value = ConnectionState.DISCONNECTED
         scheduleReconnect()
@@ -144,13 +159,30 @@ class BillingManager(
                 }
             )
             .build()
-        val result = billingClient.queryProductDetails(params)
-        if (result.billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-            val list = result.productDetailsList.orEmpty()
+        val (billingResult, result) = queryProductDetailsAsync(params)
+        if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+            val list = result.productDetailsList
             Log.d(TAG, "Product details: ${list.map { it.productId }}")
+            // PBL 8: products that couldn't be fetched (e.g. not created/active in
+            // Play Console, or not available to this user) are reported separately.
+            result.unfetchedProductList.forEach { p: UnfetchedProduct ->
+                Log.w(TAG, "Unfetched product ${p.productId} (status ${p.statusCode})")
+            }
             _products.value = list.associateBy { it.productId }
         } else {
-            Log.w(TAG, "queryProductDetails failed: ${result.billingResult.debugMessage}")
+            Log.w(TAG, "queryProductDetails failed: ${billingResult.debugMessage}")
+        }
+    }
+
+    /**
+     * Coroutine wrapper around PBL 8's queryProductDetailsAsync, which returns a
+     * [QueryProductDetailsResult] (the billing-ktx extension drops the unfetched list).
+     */
+    private suspend fun queryProductDetailsAsync(
+        params: QueryProductDetailsParams,
+    ): Pair<BillingResult, QueryProductDetailsResult> = suspendCancellableCoroutine { cont ->
+        billingClient.queryProductDetailsAsync(params) { billingResult, result ->
+            if (cont.isActive) cont.resume(billingResult to result)
         }
     }
 

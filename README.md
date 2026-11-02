@@ -12,12 +12,13 @@ products) and a banner-ad abstraction with optional AdMob (test IDs).
 > Debug builds include local "grant" toggles in the Store so you can test the
 > premium towers and ad removal without Play.
 
-> ⚠️ **Billing library version:** the project pins Play Billing Library **7.1.1**.
-> Google Play's deprecation policy stopped accepting *new apps and updates* that
-> use PBL 7 after **Aug 31, 2026** (extension deadline **Nov 1, 2026**). Before
-> uploading to Play, change `billing` in `gradle/libs.versions.toml` to `8.3.0`
-> or `9.1.0` — the code compiles unchanged against both.
-> See <https://developer.android.com/google/play/billing/deprecation-faq>.
+> **Billing Library 8 required:** the project uses Play Billing Library
+> **8.3.0** (`billing-ktx`, latest stable 8.x). Google Play no longer accepts new
+> apps or updates built with PBL 7 or earlier (deadline Aug 31, 2026; extension
+> deadline Nov 1, 2026), and PBL 8 is supported until Aug 31, 2027 — plan to move
+> to PBL 9 before then. See
+> <https://developer.android.com/google/play/billing/deprecation-faq> and the
+> [PBL 8 migration guide](https://developer.android.com/google/play/billing/migrate-gpblv8).
 
 ---
 
@@ -33,7 +34,7 @@ products) and a banner-ad abstraction with optional AdMob (test IDs).
 - **Pause** menu (Resume / Restart / Main menu), **1x/2x speed**, auto-pause when the app is backgrounded, Back button opens pause.
 - **Game over** and **Victory** screens; best wave saved.
 - **Main menu**, **Game** and **Settings** activities (sound toggle, restore purchases, reset best score).
-- **Google Play Billing** (`BillingManager`): connection with exponential back-off reconnect, product-details query, purchase flow, acknowledgement, restore on startup and on resume, revoke on refund, pending-purchase handling, entitlements persisted in SharedPreferences and exposed as `StateFlow`.
+- **Google Play Billing Library 8** (`BillingManager`): connection with auto service reconnection plus exponential back-off reconnect, product-details query, purchase flow, acknowledgement, restore on startup and on resume, revoke on refund, pending-purchase handling, entitlements persisted in SharedPreferences and exposed as `StateFlow`.
 - **Store dialog** (from main menu and in-game HUD) with live localized prices, Owned state, Restore button, the Play Console note, and debug-only local grants.
 - **Ads**: `AdManager` facade with a `BannerAdProvider` abstraction — AdMob banner (Google's official test IDs) or a plain placeholder view. Banner is removed and hidden when `remove_ads` is owned.
 - **Sound effects** via `ToneGenerator` (no asset files), honoring the settings toggle.
@@ -117,7 +118,7 @@ tower-defense/
 - **Android Studio** (latest stable; Ladybug or newer).
 - **JDK 17** (Android Studio's bundled JBR 17+ works; for CLI builds set `JAVA_HOME` to a JDK 17).
 - Android SDK Platform **35** and Build-Tools 35 (Android Studio installs them on first sync).
-- Toolchain used: AGP 8.13.2, Gradle 8.14.6 (wrapper), Kotlin 2.3.21, compileSdk/targetSdk 35, minSdk 24.
+- Toolchain used: AGP 8.13.2, Gradle 8.14.6 (wrapper), Kotlin 2.3.21, Play Billing 8.3.0, compileSdk/targetSdk 35, minSdk 24.
 
 ## Open and run
 
@@ -196,7 +197,7 @@ Alternatively in Android Studio: **Build › Generate Signed App Bundle / APK…
 1. **Developer account** – register at <https://play.google.com/console> (one-time fee) and complete identity verification. New personal accounts must run a closed test (currently ≥12 testers for 14 days) before production access.
 2. **Create app** – *All apps › Create app*: name, default language, App/Game = **Game**, Free, accept declarations.
 3. **Use a unique applicationId** – change `applicationId`/`namespace` from `com.toasteralley.towerdefense` if needed; it can never change after the first upload.
-4. **Switch Billing to ≥ 8** – see the warning at the top (Play rejects PBL 7 uploads after Nov 1, 2026).
+4. **Billing Library ≥ 8** – already satisfied (PBL 8.3.0); Play rejects uploads using PBL 7 or older.
 5. **Replace AdMob test IDs** (see *Ads* below) or set `USE_ADMOB` to `false`.
 6. **Build the signed AAB** – `./gradlew bundleRelease`.
 7. **Internal testing track** – *Testing › Internal testing › Create new release*. Opt in to **Play App Signing**, upload `app-release.aab`, add release notes, *Save › Review › Start rollout*. Add testers (email list) and share the opt-in link. *The app must be uploaded before in-app products can be created.*
@@ -236,8 +237,8 @@ Never click your own live ads; register test devices in AdMob. For EEA/UK users 
 
 `BillingManager` (one instance in `TowerDefenseApp`):
 
-1. `startConnection()` on app start; reconnects with back-off (1 s → 60 s) after disconnects.
-2. On connect: `queryProductDetails()` for both INAPP products, then `restorePurchases()` (`queryPurchasesAsync`).
+1. Built with PBL 8 options: `enablePendingPurchases(PendingPurchasesParams…enableOneTimeProducts())` and `enableAutoServiceReconnection()`. `startConnection()` runs on app start; an extra back-off retry (1 s → 60 s) refreshes data after disconnects.
+2. On connect: `queryProductDetailsAsync()` for both INAPP products — PBL 8 returns a `QueryProductDetailsResult` whose `unfetchedProductList` is logged (usually means the product isn't created/active in Play Console) — then `restorePurchases()` via `queryPurchasesAsync` (PBL 8 removed `queryPurchaseHistory`; it's not used).
 3. `launchPurchase(activity, productId)` opens the Play purchase sheet.
 4. `onPurchasesUpdated` / restore → `processPurchases`: grants entitlement for `PURCHASED`, **acknowledges** unacknowledged purchases (Play auto-refunds unacknowledged purchases after 3 days), reports `PENDING`. A full restore also revokes refunded items.
 5. Entitlements are saved to SharedPreferences (instant offline startup) and published as `StateFlow<Entitlements>`; `GameActivity` unlocks Sniper/Laser and `AdManager` hides the banner reactively.
