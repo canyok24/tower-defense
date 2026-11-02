@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/menu_background"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <ImageView
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_tower" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/menu_title"
+            android:textColor="@color/accent"
+            android:textSize="34sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/menu_subtitle"
+            android:textColor="#CFD8DC"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/best_wave"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:textColor="#B0BEC5"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/btn_play"
+            style="@style/MenuButton"
+            android:text="@string/play" />
+
+        <Button
+            android:id="@+id/btn_store"
+            style="@style/MenuButton"
+            android:text="@string/store" />
+
+        <Button
+            android:id="@+id/btn_settings"
+            style="@style/MenuButton"
+            android:text="@string/settings" />
+    </LinearLayout>
+
+    <!-- Banner ad slot; hidden when "remove_ads" is owned. -->
+    <FrameLayout
+        android:id="@+id/ad_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="50dp" />
+</LinearLayout>

@@ -1,0 +1,30 @@
+# Gradle / build
+.gradle/
+build/
+*/build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+.DS_Store
+.navigation/
+
+# Generated / outputs
+*.apk
+*.aab
+*.ap_
+*.dex
+output-metadata.json
+
+# Signing material - NEVER commit
+*.jks
+*.keystore
+keystore.properties
+google-services.json
+
+# Logs
+*.log

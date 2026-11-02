@@ -1,0 +1,6 @@
+<resources>
+    <color name="bg_dark">#FF102027</color>
+    <color name="primary">#FF2E7D32</color>
+    <color name="accent">#FFFFD54F</color>
+    <color name="ic_launcher_background">#FF2E7D32</color>
+</resources>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A simple castle tower. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="72dp"
+    android:height="72dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#FFFFD54F"
+        android:pathData="M34,30h8v8h6v-8h12v8h6v-8h8v18l-6,6v26h-28v-26l-6,-6z" />
+    <path android:fillColor="#FF5D4037"
+        android:pathData="M48,66h12v14h-12z" />
+    <path android:fillColor="#FF37474F"
+        android:pathData="M50,48h8v8h-8z" />
+    <path android:fillColor="#FFE53935"
+        android:pathData="M53,14h2v16h-2zM55,14l12,4 -12,4z" />
+</vector>

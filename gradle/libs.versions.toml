@@ -1,0 +1,28 @@
+[versions]
+agp = "8.13.2"
+kotlin = "2.3.21"
+coreKtx = "1.15.0"
+appcompat = "1.7.0"
+material = "1.12.0"
+lifecycle = "2.8.7"
+# Play Billing Library. 7.1.1 is the latest 7.x (as requested).
+# WARNING: Google Play stopped accepting NEW apps/updates built with PBL 7 after
+# Aug 31, 2026 (extension deadline Nov 1, 2026). Before uploading to Play, set this
+# to "8.3.0" or "9.1.0" - the code compiles unchanged against both (verified).
+billing = "7.1.1"
+playServicesAds = "23.6.0"
+junit = "4.13.2"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+material = { group = "com.google.android.material", name = "material", version.ref = "material" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
+billing-ktx = { group = "com.android.billingclient", name = "billing-ktx", version.ref = "billing" }
+play-services-ads = { group = "com.google.android.gms", name = "play-services-ads", version.ref = "playServicesAds" }
+
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
