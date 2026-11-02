@@ -5,11 +5,9 @@ coreKtx = "1.15.0"
 appcompat = "1.7.0"
 material = "1.12.0"
 lifecycle = "2.8.7"
-# Play Billing Library. 7.1.1 is the latest 7.x (as requested).
-# WARNING: Google Play stopped accepting NEW apps/updates built with PBL 7 after
-# Aug 31, 2026 (extension deadline Nov 1, 2026). Before uploading to Play, set this
-# to "8.3.0" or "9.1.0" - the code compiles unchanged against both (verified).
-billing = "7.1.1"
+# Play Billing Library 8 (latest stable 8.x). Google Play rejects new apps and
+# updates built with PBL 7 or earlier (deadline Aug 31, 2026; extension Nov 1, 2026).
+billing = "8.3.0"
 playServicesAds = "23.6.0"
 junit = "4.13.2"
 
