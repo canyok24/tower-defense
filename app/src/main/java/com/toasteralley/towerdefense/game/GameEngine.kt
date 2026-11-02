@@ -229,12 +229,15 @@ class GameEngine(
             tower.applyUpgrade(c)
         }
         addEffect(Effect(Effect.Kind.RING, tower.x, tower.y, 0.8f, 0xFFFFD54F.toInt(), 0.4f))
-        if (tower.level == 10 || tower.level == 20) {
+        if (TowerStats.isMilestone(tower.level)) {
             showMessage("${tower.type.displayName} reached milestone level ${tower.level}!", 1.5f)
         }
         events.onTowerUpgraded()
         return true
     }
+
+    /** Number of levels an "xN" bulk button buys (clamped at max level). */
+    fun bulkLevels(tower: Tower, n: Int): Int = n.coerceAtMost(Tower.MAX_LEVEL - tower.level).coerceAtLeast(0)
 
     /** Buys as many levels as current gold allows. */
     fun upgradeTowerMax(tower: Tower): Boolean {
@@ -250,8 +253,8 @@ class GameEngine(
         if (!isRunning) return
         if (towers.remove(tower)) {
             val value = tower.sellValue
-            gold += value
-            addEffect(Effect(Effect.Kind.TEXT, tower.x, tower.y, 0f, 0xFFFFD54F.toInt(), 0.9f, "+$value"))
+            gold = satAdd(gold, value)
+            addEffect(Effect(Effect.Kind.TEXT, tower.x, tower.y, 0f, 0xFFFFD54F.toInt(), 0.9f, "+${GoldFormat.compact(value)}"))
             events.onTowerSold()
         }
     }
@@ -501,7 +504,7 @@ class GameEngine(
         earn(reward)
         kills++
         if (e.type == EnemyType.BOSS) bossKills++
-        if (!lowFx) addEffect(Effect(Effect.Kind.TEXT, e.x, e.y, 0f, 0xFFFFD54F.toInt(), 0.7f, "+$reward"))
+        if (!lowFx) addEffect(Effect(Effect.Kind.TEXT, e.x, e.y, 0f, 0xFFFFD54F.toInt(), 0.7f, "+${GoldFormat.compact(reward)}"))
         addEffect(Effect(Effect.Kind.RING, e.x, e.y, e.type.radius * 1.6f, e.type.color, 0.3f))
         events.onEnemyKilled(e.type)
     }

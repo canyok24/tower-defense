@@ -117,20 +117,28 @@ class ProgressionTest {
         assertEquals(0, Progression.superTokensForGold(0))
         assertEquals(0, Progression.superTokensForGold(k - 1))
         assertEquals(1, Progression.superTokensForGold(k))
-        assertEquals(1, Progression.superTokensForGold(4 * k - 1))
-        assertEquals(2, Progression.superTokensForGold(4 * k))
-        assertEquals(3, Progression.superTokensForGold(9 * k))
-        assertEquals(10, Progression.superTokensForGold(100 * k))
+        assertEquals(1, Progression.superTokensForGold(16 * k - 1))
+        assertEquals(2, Progression.superTokensForGold(16 * k))
+        assertEquals(3, Progression.superTokensForGold(81 * k))
+        assertEquals(10, Progression.superTokensForGold(10_000 * k))
+        assertEquals(10, Progression.superTokensForGold(14_641 * k - 1))
+        assertEquals(11, Progression.superTokensForGold(14_641 * k))
+        // Fourth root: saturated lifetime gold gives a finite, sane count.
+        val maxTokens = Progression.superTokensForGold(Long.MAX_VALUE / 2)
+        assertTrue(maxTokens in 2000..3000)
+        assertTrue(Progression.goldForSuperTokens(maxTokens) <= Long.MAX_VALUE / 2)
+        assertTrue(Progression.goldForSuperTokens(maxTokens + 1) > Long.MAX_VALUE / 2)
+        assertEquals(Long.MAX_VALUE, Progression.goldForSuperTokens(1_000_000))
 
         val p = Progression(MapKeyValueStore())
         // Many small runs add up (lifetime gold is cumulative).
-        repeat(8) { p.recordRun(run(gold = k / 2)) }
-        assertEquals(4 * k, p.lifetimeGold)
+        repeat(8) { p.recordRun(run(gold = 2 * k)) }
+        assertEquals(16 * k, p.lifetimeGold)
         assertEquals(2, p.superTokensEarned)
         assertEquals(2, p.superTokensAvailable)
-        assertEquals(9 * k, p.goldForNextSuperToken)
+        assertEquals(81 * k, p.goldForNextSuperToken)
         assertEquals(0f, p.superTokenProgress, 1e-6f)
-        p.recordRun(run(gold = k * 5 / 2))
+        p.recordRun(run(gold = k * 65 / 2))
         assertEquals(0.5f, p.superTokenProgress, 1e-6f)
     }
 
@@ -146,7 +154,7 @@ class ProgressionTest {
 
         val k = Progression.SUPER_TOKEN_GOLD_K
         val p = Progression(store)
-        p.recordRun(run(tokens = 5_000, gold = 9 * k, waves = 15))
+        p.recordRun(run(tokens = 5_000, gold = 81 * k, waves = 15))
         MetaUpgrade.entries.forEach { p.buy(it); p.buy(it) }
         assertEquals(3, p.superTokensAvailable)
         assertTrue(p.level(MetaUpgrade.DAMAGE) > 0)
@@ -175,9 +183,9 @@ class ProgressionTest {
         assertTrue(damageBefore > 0f)
         // No double earning: the 3 spent tokens can't come back...
         assertEquals(0, p.superTokensAvailable)
-        p.recordRun(run(gold = 7 * k - 1))
+        p.recordRun(run(gold = 175 * k - 1))
         assertEquals(0, p.superTokensAvailable)
-        // ...but progress continues toward the 4th (16k lifetime).
+        // ...but progress continues toward the 4th (256k lifetime).
         p.recordRun(run(gold = 1))
         assertEquals(1, p.superTokensAvailable)
     }
@@ -185,7 +193,7 @@ class ProgressionTest {
     @Test
     fun partialPrestigeKeepsTheRest() {
         val p = Progression(MapKeyValueStore())
-        p.recordRun(run(gold = 25 * Progression.SUPER_TOKEN_GOLD_K))
+        p.recordRun(run(gold = 625 * Progression.SUPER_TOKEN_GOLD_K))
         assertEquals(5, p.superTokensAvailable)
         assertTrue(p.prestige(2))
         assertEquals(3, p.superTokensAvailable)
@@ -208,7 +216,7 @@ class ProgressionTest {
         entitlements.savePurchased(Entitlements(removeAds = true, premiumTowers = false))
         val k = Progression.SUPER_TOKEN_GOLD_K
         val p = Progression(store)
-        p.recordRun(run(tokens = 500, gold = 100 * k)) // 10 Super Tokens
+        p.recordRun(run(tokens = 500, gold = 10_000 * k)) // 10 Super Tokens
         assertEquals(10, p.superTokensAvailable)
 
         assertFalse(p.prestige(PrestigeAllocation(5, 4, 2)))   // 11 > 10
@@ -262,7 +270,7 @@ class ProgressionTest {
     fun legacySpentMigratesIntoDamage() {
         val store = MapKeyValueStore()
         store.putInt("super_tokens_spent", 4)
-        store.putLong("lifetime_gold", 25 * Progression.SUPER_TOKEN_GOLD_K)
+        store.putLong("lifetime_gold", 625 * Progression.SUPER_TOKEN_GOLD_K)
         val p = Progression(store)
         assertEquals(4, p.spent(PrestigeUpgrade.DAMAGE))
         assertEquals(0, p.spent(PrestigeUpgrade.KILL_GOLD))

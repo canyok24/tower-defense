@@ -27,7 +27,7 @@ products) and a banner-ad abstraction with optional AdMob (test IDs).
 - **Grid map with a winding path** (16×9 tiles), entry/exit markers, scaled to any landscape screen. Enemies follow waypoints; lives are lost when they reach the exit.
 - **Tap-to-build**: pick a tower in the scrollable side panel (drag to scroll through all 11), tap any empty grass tile. Path/occupied tiles are rejected.
 - **11 tower types** (4 premium) with unique drawn sprites and colors: projectiles, splash, slow-on-hit, instant hits, a branching continuous laser beam, stun pulses and a screen-shaking nuke.
-- **20 in-run upgrade levels per tower** with data-driven stat curves, milestone bonuses at levels 10 and 20, steep late-game costs, bulk buy (**x5** and **Max affordable**) and **Sell** (70% of everything invested).
+- **100 in-run upgrade levels per tower** with data-driven stat curves (flattened past level 20, firm caps), milestone bonuses every 10 levels, steep ×3 / ×1.2 late costs, bulk buy (**x5**, **x10** and **Max affordable**) and **Sell** (70% of everything invested).
 - **4 enemy types** with HP bars, armor, slow and **stun** indicators, hit flash. Bosses resist stuns.
 - **Endless waves**: 20 handcrafted waves, then procedurally generated waves forever (no cap). Clearing wave 20 is the **Victory milestone** (banner + Tokens bonus once per run) and the run continues. HP, count, mix and speed scale smoothly; bosses every 5 waves (more on every 10th). Between-wave countdown with a **Start wave** button (early-start gold bonus) and end-of-wave gold.
 - **Designed gold economy**: income vs. a measurable "cost to kill" each wave — very generous early (5× at wave 1, >2× through wave 100), parity around wave 1000 (see *Economy*).
@@ -68,37 +68,48 @@ Notes:
 - **Laser**: no projectiles; the beam is drawn every frame. The main beam (thick, bright) deals full DPS to the lead enemy; thinner, dimmer branch beams jump from it to the nearest enemies within 2.2 tiles (and within tower range). Beams ignore armor. Hard cap: 10 targets.
 - **Heavy** bonus multiplies damage before armor.
 
-### In-run upgrades (levels 1–20)
+### In-run upgrades (levels 1–100)
 
-All curves live in `game/TowerStats.kt` (`TowerStats.of(type, level, modifiers)`).
+All curves live in `game/TowerStats.kt` (`TowerStats.of(type, level, modifiers)`). Every tower goes to **level 100**. Levels 1–20 use the original (steep) curves unchanged; past level 20 every curve is **flattened** and all caps are firm.
 
-| Stat | Per level | Level 10 milestone | Level 20 milestone | Clamp |
-|------|-----------|--------------------|--------------------|-------|
-| Damage | ×1.12 (Annihilator ×1.10) | ×1.25 | ×1.40 | — |
-| Fire rate | +3% of base | ×1.10 | ×1.15 | ≤ 2.5× base, ≤ 16/s |
-| Range | +2.5% of base | +8% | +10% | ≤ 1.7× base, ≤ 8 tiles |
-| Splash radius | +2% of base | +10% | +15% | ≤ 1.7× base |
-| Slow factor | −0.01 | −0.05 | −0.05 | ≥ 0.30 (max 70% slow) |
-| Slow duration | +3% | ×1.1 | ×1.1 | ≤ 2× base |
-| Stun duration | +0.03 s | +0.1 s | +0.2 s | ≤ 1.5 s |
-| Stun cooldown | −0.08 s | −0.3 s | −0.4 s | ≥ 1.8 s |
-| Laser targets | +1 every 3 levels | +1 | +2 | ≤ 10 |
-| Laser branch damage | +0.5% | +2% | +3% | ≤ 40% |
-| Heavy boss bonus | +0.025 | +0.15 | +0.25 | ≤ ×2.5 |
+| Stat | Per level 2–20 | Per level 21–100 | L10 milestone | L20 milestone | L30, 40 … 100 milestones (each) | Clamp |
+|------|-----------|-----------|---------------|---------------|------------------|-------|
+| Damage | ×1.12 (Annihilator ×1.10) | ×(1.035 + (g₀ − 1.035)·e^(−(L−20)/15)) — tapers from ×1.12 toward ×1.035 | ×1.25 | ×1.40 | ×1.08 | — |
+| Fire rate | +3% of base | +1% of base | ×1.10 | ×1.15 | ×1.02 | ≤ 2.5× base, ≤ 16/s |
+| Range | +2.5% of base | +0.5% | +8% | +10% | +2% | ≤ 1.7× base, ≤ 8 tiles |
+| Splash radius | +2% of base | +0.5% | +10% | +15% | +3% | ≤ 1.7× base |
+| Slow factor | −0.01 | −0.002 | −0.05 | −0.05 | −0.01 | ≥ 0.30 (max 70% slow) |
+| Slow duration | +3% | +1% | ×1.1 | ×1.1 | ×1.03 | ≤ 2× base |
+| Stun duration | +0.03 s | +0.005 s | +0.1 s | +0.2 s | +0.03 s | ≤ 1.5 s (stun-immunity window still applies) |
+| Stun cooldown | −0.08 s | −0.01 s | −0.3 s | −0.4 s | −0.05 s | ≥ 1.8 s |
+| Laser targets | +1 every 3 levels | +1 every 20 levels | +1 | +2 | — | ≤ 10 |
+| Laser branch damage | +0.5% | +0.1% | +2% | +3% | +0.5% | ≤ 40% |
+| Heavy boss bonus | +0.025 | +0.005 | +0.15 | +0.25 | +0.03 | ≤ ×2.5 |
 
-**Annihilator fire rate**: levels 1–13 stay slow (3.57 s → 3.03 s per shot), then ramp geometrically (~×1.29 per level) over 14–20 to **0.50 s per shot** at level 20 while damage keeps rising (600 → 2354 at L13 → 6422 at L20).
+Arrow damage: **10** (L1) → **150.7** (L20) → **1,460** (L50) → **13,988** (L100) — about 1,400× level 1 instead of the ~75,000× a constant ×1.12 would give. Arrow fire rate reaches its 2.5× cap (3.5/s) around level 50.
 
-**Upgrade cost** to reach level N (`game/TowerStats.kt`, `UpgradeCosts`): level 2 costs the tower's `upgradeBase`; levels 3–12 are ×1.13 per level; then versus the previous level: L13 ×3, L14 ×3, L15 ×1.2, L16 ×1.2, L17 ×1.2, L18 ×3, L19 ×1.2, L20 ×1.2. The exact value is rounded to a nice number (<100: nearest 5, <1000: nearest 10, <10000: nearest 50, else nearest 100).
+**Annihilator fire rate**: levels 1–13 stay slow (3.57 s → 3.03 s per shot), then only a gentle linear ramp to ×1.5 of the L13 rate at **level 80** (2.02 s per shot), then the **surge**: a geometric ramp over levels 81–100 to **0.40 s per shot** at level 100. The gap is a firm minimum: the rate is clamped to 2.5 shots/s *after* meta Attack Speed, so it is never below 0.4 s. Damage keeps rising throughout (600 → 6,422 at L20 → 49,259 at L50 → 455,138 at L100).
+
+| Annihilator level | 1 | 13 | 20 | 50 | 80 | 90 | 100 |
+|---|---|---|---|---|---|---|---|
+| Seconds per shot | 3.57 | 3.03 | 2.88 | 2.37 | 2.02 | 0.90 | 0.40 |
+
+**Upgrade cost** to reach level N (`game/TowerStats.kt`, `UpgradeCosts`): level 2 costs the tower's `upgradeBase`; levels 3–12 are ×1.13 per level; then versus the previous level: **×3 at levels 13, 14, 18, 28, 38 and 48**, and **×1.2 at every other level 15–100**. The multipliers are applied to the *unrounded* running cost; only the charged price is rounded to a nice number (<100: nearest 5, <1,000: nearest 10, <10,000: nearest 50, <1,000,000: nearest 100, above: 4 significant digits). Costs and invested gold are `Long` (an Annihilator 1 → 100 costs 1.1e13, far below the 4e18 gold clamp).
 
 Example — Arrow (`upgradeBase` 30):
 
-| Level | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Cost | 30 | 35 | 40 | 45 | 50 | 55 | 60 | 70 | 80 | 90 | 100 | 310 | 920 | 1100 | 1300 | 1600 | 4750 | 5700 | 6850 |
+| Level | 10 | 12 | 13 | 14 | 18 | 20 | 28 | 38 | 48 | 60 | 80 | 100 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Cost of that level | 80 | 100 | 310 | 920 | 4,750 | 6,850 | 73,500 | 1.138M | 17.62M | 157.1M | 6.024B | 230.9B |
+| Total upgrades 1 → L | 465 | 655 | 965 | 1,885 | 10,635 | 23,185 | 202,635 | 3.18M | 49.2M | 886M | 36.1B | **1.385T** |
+
+Levels 2–20 are identical to the previous 20-level version (30, 35, 40, 45, 50, 55, 60, 70, 80, 90, 100, 310, 920, 1100, 1300, 1600, 4750, 5700, 6850). Full Arrow 1 → 100 upgrade total: **1,385,498,749,235** gold.
 
 `upgradeBase` per tower: Arrow 30, Cannon 60, Frost 50, Slow 55, Rapid 70, Heavy 100, Disruptor 80, Sniper 90, Railgun 120, Laser 150, Annihilator 240.
 
-The upgrade panel shows **Level X/20**, current → next stats, the next cost, **x5** (sum of the next five costs, fewer near the cap) and **Max +N** (the most levels current gold can buy in a row, with their exact summed cost). **Sell** refunds 70% of the total invested (build + all upgrades).
+The upgrade panel shows **Level X/100**, current → next stats, the next cost, **x5** and **x10** (sum of the next five / ten costs, fewer near the cap) and **Max +N** (the most levels current gold can buy in a row, with their exact summed cost). **Sell** refunds 70% of the total invested (build + all upgrades). Tower badges turn gold at L20, orange at L50 and cyan at L100.
+
+All gold, costs, damage and HP in the UI use compact formatting: plain below 1,000, then **1.2K, 3.4M, 5.6B, 7.8T**, and scientific from 1e15 on (**1.2e15**) — `game/GoldFormat.kt`.
 
 ### Game speed
 
@@ -133,10 +144,10 @@ Cost of level L+1 = `niceRound(baseCost × growth^L)` (growth 1.28–1.32).
 
 ### Super Tokens (prestige)
 
-Super Tokens are **never sold** (no billing products) and have no milestone rewards — they accrue automatically from **lifetime gold earned across all runs combined** (kills, wave gold and early-start bonuses; not sell refunds). `K` was raised from 4,000 to **100,000** together with the new economy (gold income is roughly 25× higher than before), keeping a similar pace:
+Super Tokens are **never sold** (no billing products) and have no milestone rewards — they accrue automatically from **lifetime gold earned across all runs combined** (kills, wave gold and early-start bonuses; not sell refunds). Since 2.1.0 the curve is a **fourth root** (it was a square root): the level-100 upgrade economy makes late-wave income grow by many orders of magnitude, and a square root would hand out millions of Super Tokens. With `K = 100,000` a fresh profile gets ~1 Super Token by wave 20, ~8 by wave 100, ~50 by wave 200, ~1,150 by wave 1000; saturated lifetime gold (4.6e18) caps at ~2,600.
 
 ```
-superTokensEarned    = floor( sqrt( lifetimeGold / 100000 ) )   # n-th token needs 100000·n² gold
+superTokensEarned    = floor( (lifetimeGold / 100000)^(1/4) )   # n-th token needs 100000·n⁴ gold
 superTokensAvailable = superTokensEarned − (spent on damage + kill gold + wave gold)
 ```
 
@@ -161,39 +172,46 @@ The Upgrades screen shows available/earned/spent Super Tokens, a progress bar to
 - **Waves 1–20** keep their handcrafted composition and the `1.14^(w−1)` HP curve. Clearing **wave 20** shows a VICTORY banner, awards the +20 victory Tokens (once per run) and the run **continues**; a smaller banner appears every 50 waves. The run ends only when lives reach 0 (or you quit).
 - **Wave 21+** are generated forever from the same base formulas (grunts `5+2w`, runners `2+2(w−3)`, tanks `1+⌊(w−5)/2⌋`) with a deterministic mix rotation: every 11th wave is *armored* (×2.5 tanks), every 7th a *rush* (×1.5 runners), every 3rd a *swarm* (×1.2 grunts). Bosses every 5 waves (`⌊w/20⌋+1`), more on every 10th (`⌊w/10⌋+1`).
 - **HP**: `hp(w) = hp(20) · (1 + (w−20)/61.5)^2` after wave 20 (smooth, < 4% per wave).
-- **Clamps (no overflow/NaN at wave 10,000+)**: at most 140 non-boss enemies and 6 bosses per wave — excess count is converted into HP so total wave HP is preserved; spawn interval floor 0.25 s; enemy speed `min(1.4, 1 + 0.08·ln(w/20))`; per-enemy HP ≤ 1e30. Enemy HP is `Double`, gold/income are `Long` (saturating at 4e15), all curve math is `Double`. Tests cover waves 10,000, 100,000, 1,000,000 and `Int.MAX_VALUE`.
+- **Clamps (no overflow/NaN at wave 10,000+)**: at most 140 non-boss enemies and 6 bosses per wave — excess count is converted into HP so total wave HP is preserved; spawn interval floor 0.25 s; enemy speed `min(1.4, 1 + 0.08·ln(w/20))`; per-enemy HP ≤ 1e30. Enemy HP is `Double`, gold/income/costs are `Long` (saturating at 4e18), all curve math is `Double`. Tests cover waves 10,000, 100,000, 1,000,000 and `Int.MAX_VALUE`.
 - Best wave is stored as an unbounded counter.
 
 ### Economy
 
-Gold per kill and per wave are derived from a measurable cost of killing each wave (`game/WaveDefinitions.kt`, `WaveDefinitions.plan(w)`):
+Gold per kill and per wave are derived from a measurable cost of killing each wave (`game/WaveDefinitions.kt`, `WaveDefinitions.plan(w)`). Since 2.1.0 the cost model follows the **level-100 upgrade path**, so gold has a real sink:
 
 ```
 EHP(w)          = sum of the HP of every enemy in wave w
 duration(w)     = spawn time of the wave + engage time (2 · Arrow range / grunt speed = 4.16 s, ÷ speed multiplier)
-refDpsPerGold   = max over L of Arrow dps(L) / (build + upgrade gold to L)   = 0.28 dps/gold (Arrow L1)
-costToKill(w)   = EHP(w) / duration(w) / refDpsPerGold      # gold of reference-tower investment that delivers the wave's HP in time
+requiredDps(w)  = EHP(w) / duration(w)
+costToKill(w)   = referenceBuildCost(requiredDps(w))   # cheapest gold for a reference build that delivers it:
+    per = requiredDps / 24                             # 24 reference Arrow towers (≈ a quarter of the buildable tiles)
+    per ≤ dps(L1)        : requiredDps / 0.28           # fractional level-1 Arrows (0.28 dps per gold)
+    dps(L) < per ≤ dps(L+1): 24 · invest(L) · (invest(L+1)/invest(L))^t,  t = ln(per/dps(L)) / ln(dps(L+1)/dps(L))
+    per > dps(L100)      : 24 · invest(L100) · per / dps(L100)   # more level-100 Arrows, linear
+    (invest(L) = 50 build + all upgrade costs to L; dps(L) = Arrow damage × fire rate at L, no meta/prestige)
 targetRatio(w)  = 1 + 4 · (1 − ln w / ln 1000)               for w ≤ 1000   (5.0 at w=1, 2.33 at w=100, 1.0 at w=1000)
-                = 1 / (1 + 0.1 · ln(w / 1000))               for w > 1000   (0.86 at 5000, 0.81 at 10,000, 0.69 at 100,000)
-income(w)       = targetRatio(w) · costToKill(w)
+                = 1 / (1 + 0.1 · ln(w / 1000))               for w > 1000   (0.86 at 5000, 0.81 at 10,000)
+income(w)       = targetRatio(w) · costToKill(w)             (clamped at 4e18)
 kill bounty     = floor(0.75 · income · enemyHP / EHP)       # bounty proportional to HP (≥ 1)
 wave gold       = income − Σ bounties                         # ≈ 25%
 ```
 
-`ratio(w) = income(w) / costToKill(w)` is measured from the rounded gold actually paid; unit tests check ratio ≥ 2 for every wave 1–100, 0.85–1.15 at wave 1000, ≤ 1 afterwards, non-increasing over waves 1–3000, and no overflow at 100,000. Meta/prestige gold multipliers apply on top and are not counted in the ratio.
+`referenceBuildCost` is continuous and strictly increasing. The reference build sits at level 1 for the first waves, reaches **L13 at wave 20, L20 at wave 50, L34 at wave 100, L63 at wave 200, L90 at wave 300** and is all level 100 from about wave 350 on; after that extra DPS is bought as additional L100 towers. Because each level past 14 costs ×1.2 (and ×3 at 18/28/38/48) for only ~×1.035–1.1 more damage, costToKill rises much faster than enemy HP through waves 20–350, and income follows it.
 
-| Wave | Grunt HP | Enemies | Gold/kill (grunt) | Wave gold | Income | costToKill | Ratio |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | 40 | 7 | 52 | 122 | 486 | 97 | 5.00 |
-| 10 | 130 | 46 | 35 | 1,389 | 5,511 | 1,503 | 3.67 |
-| 20 | 482 | 92 | 93 | 6,416 | 25,512 | 7,813 | 3.27 |
-| 50 | 1,698 | 146 | 194 | 19,242 | 76,708 | 28,050 | 2.73 |
-| 100 | 8,177 | 146 | 816 | 77,487 | 309,770 | 132,800 | 2.33 |
-| 500 | 596,400 | 146 | 43,079 | 3,998,326 | 15,992,898 | 11.41M | 1.40 |
-| 1000 | 4.47M | 145 | 234,581 | 21,408,981 | 85,635,641 | 85.64M | 1.00 |
-| 5000 | 523M | 146 | 23,509,326 | 2.14B | 8.58B | 9.96B | 0.86 |
+`ratio(w) = income(w) / costToKill(w)` is measured from the rounded gold actually paid; unit tests check ratio ≥ 2 for every wave 1–100, 0.85–1.15 at wave 1000, ≤ 1 afterwards, non-increasing over waves 1–3000, and no overflow at 100,000. Meta/prestige gold multipliers apply on top and are not counted in the ratio. Base income reaches the 4e18 `Long` clamp around wave ~21,000; beyond that it stays pinned there (ratio keeps falling, still finite).
 
-(Grunt HP includes count compression after the 140-enemy clamp; bosses carry a larger share of wave HP and gold, e.g. wave 10 boss 4,553 HP / 1,232 gold.) Note the practical ceiling of a run is DPS, not gold: towers cap at level 20 and the map has a fixed number of tiles, so late waves are limited by meta/prestige multipliers rather than income.
+| Wave | Grunt HP | Enemies | Gold/kill (grunt) | Wave gold | Income | costToKill | Ratio | Reference level |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 40 | 7 | 52 | 122 | 486 | 97 | 5.00 | 1 |
+| 10 | 130 | 46 | 55 | 2,194 | 8,688 | 2,369 | 3.67 | 3 |
+| 20 | 482 | 92 | 214 | 14,759 | 58,809 | 18,010 | 3.27 | 13 |
+| 50 | 1,698 | 146 | 3,356 | 330,896 | 1.32M | 483.9K | 2.73 | 20 |
+| 100 | 8,177 | 146 | 131,686 | 12.49M | 49.97M | 21.42M | 2.33 | 34 |
+| 500 | 596.4K | 146 | 341.4B | 31.68T | 126.7T | 90.43T | 1.40 | >100 |
+| 1000 | 4.47M | 145 | 1.86T | 169.6T | 678.6T | 678.6T | 1.00 | >100 |
+| 5000 | 522.9M | 146 | 186.3T | 1.7e16 | 6.8e16 | 7.9e16 | 0.86 | >100 |
+
+(Grunt HP includes count compression after the 140-enemy clamp; bosses carry a larger share of wave HP and gold.) The practical ceiling of a run is DPS: towers cap at level 100 and the map has a fixed number of tiles, so very late waves are limited by meta/prestige multipliers rather than income.
 
 ### Enemies
 
@@ -234,7 +252,7 @@ tower-defense/
 │       │   │   │   ├── GameEngine.kt      # simulation: waves, combat, gold, lives
 │       │   │   │   ├── GameMap.kt         # grid + path waypoints
 │       │   │   │   ├── TowerType.kt / Tower.kt
-│       │   │   │   ├── TowerStats.kt      # level curves (1-20), clamps, UpgradeCosts, RunModifiers
+│       │   │   │   ├── TowerStats.kt      # level curves (1-100), clamps, UpgradeCosts, RunModifiers
 │       │   │   │   ├── GoldFormat.kt      # compact big-number formatting
 │       │   │   │   ├── EnemyType.kt / Enemy.kt
 │       │   │   │   ├── Projectile.kt      # projectiles + visual effects
@@ -255,7 +273,8 @@ tower-defense/
 │       │   │       └── Insets.kt          # immersive mode helper
 │       │   └── res/ (layouts, vector drawables, adaptive icon, themes, xml backup rules)
 │       └── test/…/ (GameEngineTest, TowerMechanicsTest, UpgradeCostTest,
-│                     SimulationSpeedTest, EconomyTest, meta/ProgressionTest)
+│                     SimulationSpeedTest, EconomyTest, GoldFormatTest,
+│                     meta/ProgressionTest)
 ├── README.md
 └── LICENSE
 ```
@@ -275,7 +294,7 @@ tower-defense/
 2. Create/start an emulator (API 24+, a "Google Play" system image if you want Billing to connect) or plug in a device with USB debugging.
 3. Press **Run ▶** (configuration `app`). The game runs in landscape.
 
-How to play: tap a tower on the right panel (drag to scroll), then tap a grass tile. Tap a placed tower to upgrade (+1 / x5 / Max) or sell. Press **Start wave** (or wait for the countdown). **II** pauses, the speed button cycles 1x…14x (▾ opens the list), **Store** opens the shop. After a run, spend Tokens in **Upgrades** on the main menu.
+How to play: tap a tower on the right panel (drag to scroll), then tap a grass tile. Tap a placed tower to upgrade (+1 / x5 / x10 / Max) or sell. Press **Start wave** (or wait for the countdown). **II** pauses, the speed button cycles 1x…14x (▾ opens the list), **Store** opens the shop. After a run, spend Tokens in **Upgrades** on the main menu.
 
 ## Build from the command line
 

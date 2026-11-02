@@ -166,22 +166,50 @@ class TowerMechanicsTest {
     @Test
     fun annihilatorFireRateCurve() {
         val a = TowerType.ANNIHILATOR
-        for (l in 1..13) {
+        // Slow early: never faster than one shot per 2 s before the surge.
+        for (l in 1..TowerStats.ANNIHILATOR_SURGE_LEVEL) {
             val interval = 1f / TowerStats.fireRateAt(a, l)
-            assertTrue("L$l interval $interval", interval >= 3.0f)
-        }
-        val i20 = 1f / TowerStats.fireRateAt(a, 20)
-        assertTrue("L20 interval $i20", i20 in 0.4f..0.6f)
-        var prevRate = 0f
-        var prevDmg = 0f
-        for (l in 1..20) {
-            val r = TowerStats.fireRateAt(a, l)
-            val d = TowerStats.damageAt(a, l)
-            assertTrue(r > prevRate); assertTrue(d > prevDmg)
-            if (l >= 14) assertTrue("dramatic ramp at L$l", r / prevRate > 1.2f)
-            prevRate = r; prevDmg = d
+            assertTrue("L$l interval $interval", interval >= 2.0f)
+            if (l <= 13) assertTrue("L$l interval $interval", interval >= 3.0f)
         }
         assertTrue(1f / TowerStats.fireRateAt(a, 1) in 3f..4f)
+        // Surge 80 -> 100 down to the firm 0.4 s gap.
+        assertEquals(0.4f, 1f / TowerStats.fireRateAt(a, 100), 1e-4f)
+        assertTrue(1f / TowerStats.fireRateAt(a, 90) in 0.6f..1.2f)
+        var prevRate = 0f
+        var prevDmg = 0f
+        for (l in 1..TowerStats.MAX_LEVEL) {
+            val r = TowerStats.fireRateAt(a, l)
+            val d = TowerStats.damageAt(a, l)
+            assertTrue("rate L$l", r > prevRate); assertTrue("dmg L$l", d > prevDmg)
+            if (l > TowerStats.ANNIHILATOR_SURGE_LEVEL) assertTrue("surge at L$l", r / prevRate > 1.05f)
+            else if (l > 13) assertTrue("gentle at L$l", r / prevRate < 1.02f)
+            prevRate = r; prevDmg = d
+        }
+    }
+
+    @Test
+    fun annihilatorMinimumShotGapHoldsWithModifiers() {
+        val fast = RunModifiers(fireRateMult = 5f)
+        for (l in 1..TowerStats.MAX_LEVEL) {
+            val gap = 1f / TowerStats.of(TowerType.ANNIHILATOR, l, fast).fireRate
+            assertTrue("L$l gap $gap", gap >= TowerStats.ANNIHILATOR_MIN_SHOT_GAP - 1e-6f)
+        }
+        assertEquals(TowerStats.ANNIHILATOR_MIN_SHOT_GAP, 1f / TowerStats.of(TowerType.ANNIHILATOR, 100, fast).fireRate, 1e-5f)
+        // In the engine: a level-100 Annihilator fires at most once per 0.4 s.
+        val e = engine()
+        val t = towerAt(TowerType.ANNIHILATOR, 2, 2, level = 100)
+        t.modifiers = fast
+        e.towers += t
+        e.enemies += dummy(EnemyType.BOSS, 3.5f, 2.5f, 0f, hp = 1e30f)
+        var shots = 0
+        var prevCd = t.cooldown
+        repeat(600) { // 10 s
+            e.update(1f / 60f)
+            if (t.cooldown > prevCd + 0.1f) shots++
+            prevCd = t.cooldown
+        }
+        assertTrue("shots $shots", shots in 20..26)
     }
 
     @Test
@@ -197,12 +225,12 @@ class TowerMechanicsTest {
     // ------------------------------------------------------------ levels
 
     @Test
-    fun levelCapIsTwentyAndStatsAreMonotonic() {
-        assertEquals(20, Tower.MAX_LEVEL)
+    fun levelCapIsHundredAndStatsAreMonotonic() {
+        assertEquals(100, Tower.MAX_LEVEL)
         assertEquals(11, TowerType.entries.size)
         for (type in TowerType.entries) {
             var prev = TowerStats.of(type, 1)
-            for (l in 2..20) {
+            for (l in 2..100) {
                 val s = TowerStats.of(type, l)
                 assertTrue("$type dmg L$l", s.damage >= prev.damage)
                 assertTrue("$type range L$l", s.range >= prev.range)
@@ -215,32 +243,82 @@ class TowerMechanicsTest {
                 assertTrue("$type beams L$l", s.beamTargets >= prev.beamTargets)
                 assertTrue("$type beam% L$l", s.beamSecondary >= prev.beamSecondary)
                 assertTrue("$type boss L$l", s.bossBonus >= prev.bossBonus)
+                assertTrue("$type finite L$l", s.damage.isFinite() && s.fireRate.isFinite())
                 prev = s
             }
-            // Clamps.
-            assertTrue(prev.slowFactor >= 0.3f)
-            assertTrue(prev.stunDuration <= TowerStats.MAX_STUN)
-            assertTrue(type.attack != Attack.PULSE || prev.stunCooldown >= TowerStats.MIN_STUN_COOLDOWN)
             // Milestone jumps at 10 and 20 are bigger than the regular step.
             val d9 = TowerStats.damageAt(type, 9); val d10 = TowerStats.damageAt(type, 10); val d11 = TowerStats.damageAt(type, 11)
             if (type.damage > 0f) assertTrue(d10 / d9 > d11 / d10)
         }
         // Clamped at max level.
-        assertEquals(TowerStats.of(TowerType.ARROW, 20), TowerStats.of(TowerType.ARROW, 25))
+        assertEquals(TowerStats.of(TowerType.ARROW, 100), TowerStats.of(TowerType.ARROW, 125))
     }
 
     @Test
-    fun cannotUpgradePastTwenty() {
+    fun firmCapsHoldAtEveryLevel() {
+        for (type in TowerType.entries) for (l in 1..100) {
+            val s = TowerStats.of(type, l)
+            assertTrue("$type range L$l", s.range <= type.range * TowerStats.MAX_RANGE_FACTOR + 1e-4f)
+            assertTrue("$type abs range L$l", s.range <= maxOf(TowerStats.ABS_MAX_RANGE, type.range) + 1e-4f)
+            assertTrue("$type slow L$l", s.slowFactor >= TowerStats.MIN_SLOW_FACTOR)
+            assertTrue("$type slowDur L$l", s.slowDuration <= type.slowDuration * TowerStats.MAX_SLOW_DURATION_FACTOR + 1e-4f)
+            assertTrue("$type stun L$l", s.stunDuration <= TowerStats.MAX_STUN)
+            assertTrue("$type stunCd L$l", type.attack != Attack.PULSE || s.stunCooldown >= TowerStats.MIN_STUN_COOLDOWN)
+            assertTrue("$type beams L$l", s.beamTargets <= TowerStats.MAX_BEAM_TARGETS)
+            assertTrue("$type beam% L$l", s.beamSecondary <= TowerStats.MAX_BEAM_SECONDARY)
+            assertTrue("$type boss L$l", s.bossBonus <= TowerStats.MAX_BOSS_BONUS)
+            assertTrue("$type splash L$l", s.splashRadius <= type.splashRadius * TowerStats.MAX_SPLASH_FACTOR + 1e-4f)
+            if (type.attack != Attack.PULSE && type != TowerType.ANNIHILATOR)
+                assertTrue("$type rate L$l", s.fireRate <= minOf(type.fireRate * TowerStats.MAX_RATE_FACTOR, TowerStats.ABS_MAX_RATE) + 1e-4f)
+        }
+        val laser = TowerStats.of(TowerType.LASER, 100)
+        assertEquals(10, laser.beamTargets)
+        assertEquals(TowerStats.MAX_BEAM_SECONDARY, laser.beamSecondary, 1e-6f)
+        val disruptor = TowerStats.of(TowerType.DISRUPTOR, 100)
+        assertEquals(TowerStats.MAX_STUN, disruptor.stunDuration, 1e-6f)
+        assertEquals(TowerStats.MIN_STUN_COOLDOWN, disruptor.stunCooldown, 1e-6f)
+        assertEquals(TowerStats.MIN_SLOW_FACTOR, TowerStats.of(TowerType.FROST, 100).slowFactor, 1e-6f)
+    }
+
+    @Test
+    fun damageGrowthFlattensPastLevel20() {
+        val a = TowerType.ARROW
+        for (l in 2..20) assertEquals(1.12, TowerStats.damageGrowthAt(a, l), 1e-12)
+        var prev = TowerStats.damageGrowthAt(a, 21)
+        assertTrue(prev < 1.12)
+        for (l in 22..100) {
+            val g = TowerStats.damageGrowthAt(a, l)
+            assertTrue("taper L$l", g <= prev && g > TowerStats.LATE_DAMAGE_GROWTH)
+            prev = g
+        }
+        assertTrue("L100 growth $prev", prev in 1.03..1.04)
+        // Late milestones (30..100) are a bump, smaller than the L10/L20 bonuses.
+        for (m in 30..100 step 10) {
+            val jump = TowerStats.damageAt(a, m) / TowerStats.damageAt(a, m - 1)
+            val normal = TowerStats.damageAt(a, m - 1) / TowerStats.damageAt(a, m - 2)
+            assertTrue("milestone $m", jump > normal * 1.05f && jump < TowerStats.L10_DAMAGE)
+        }
+        // Not absurd: Arrow L100 is ~1,400x L1 (the steep 1.12 curve would give > 75,000x).
+        val ratio = TowerStats.damageAt(a, 100) / TowerStats.damageAt(a, 1)
+        assertTrue("ratio $ratio", ratio in 500f..3000f)
+        // L1..20 unchanged.
+        assertEquals(150.72f, TowerStats.damageAt(a, 20), 0.01f)
+    }
+
+    @Test
+    fun cannotUpgradePastHundred() {
         val e = engine()
-        e.gold = 10_000_000
-        assertTrue(e.placeTower(TowerType.ARROW, 0, 0))
+        e.gold = WaveDefinitions.MAX_GOLD
+        assertTrue(e.placeTower(TowerType.ANNIHILATOR, 0, 0))
         val t = e.towerAt(0, 0)!!
         assertTrue(e.upgradeTowerMax(t))
-        assertEquals(20, t.level)
+        assertEquals(100, t.level)
         assertTrue(t.isMaxLevel)
-        assertEquals(-1, t.upgradeCost)
+        assertEquals(-1L, t.upgradeCost)
         assertFalse(e.upgradeTower(t))
         assertEquals(0, t.maxAffordable(e.gold))
+        assertEquals(TowerType.ANNIHILATOR.cost + UpgradeCosts.costRange(TowerType.ANNIHILATOR, 1, 100), t.invested)
+        assertTrue(t.sellValue > 0 && t.damage.isFinite())
     }
 
     @Test

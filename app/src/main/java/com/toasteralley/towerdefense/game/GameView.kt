@@ -80,6 +80,7 @@ class GameView @JvmOverloads constructor(
     private val startWaveBtn = RectF()
     private val upgradeBtn = RectF()
     private val upgrade5Btn = RectF()
+    private val upgrade10Btn = RectF()
     private val upgradeMaxBtn = RectF()
     private val sellBtn = RectF()
     private val closeBtn = RectF()
@@ -203,7 +204,7 @@ class GameView @JvmOverloads constructor(
         itemH = max(listRect.height() / 6.3f, 1f)
         clampScroll()
 
-        // Upgrade panel buttons: [+1] / [x5][Max] / [Sell][Close]
+        // Upgrade panel buttons: [+1] / [x5][x10][Max] / [Sell][Close]
         val btnH = panelRect.height() * 0.095f
         val gap = pad * 0.6f
         val half = (listRect.width() - gap) / 2f
@@ -211,8 +212,10 @@ class GameView @JvmOverloads constructor(
         sellBtn.set(listRect.left, row3, listRect.left + half, row3 + btnH)
         closeBtn.set(listRect.right - half, row3, listRect.right, row3 + btnH)
         val row2 = row3 - gap - btnH
-        upgrade5Btn.set(listRect.left, row2, listRect.left + half, row2 + btnH)
-        upgradeMaxBtn.set(listRect.right - half, row2, listRect.right, row2 + btnH)
+        val third = (listRect.width() - gap * 2) / 3f
+        upgrade5Btn.set(listRect.left, row2, listRect.left + third, row2 + btnH)
+        upgrade10Btn.set(listRect.left + third + gap, row2, listRect.left + third * 2 + gap, row2 + btnH)
+        upgradeMaxBtn.set(listRect.right - third, row2, listRect.right, row2 + btnH)
         val row1 = row2 - gap - btnH
         upgradeBtn.set(listRect.left, row1, listRect.right, row1 + btnH)
 
@@ -327,6 +330,7 @@ class GameView @JvmOverloads constructor(
                 when {
                     upgradeBtn.contains(x, y) -> e.upgradeTower(sel, 1)
                     upgrade5Btn.contains(x, y) -> e.upgradeTower(sel, 5)
+                    upgrade10Btn.contains(x, y) -> e.upgradeTower(sel, 10)
                     upgradeMaxBtn.contains(x, y) -> e.upgradeTowerMax(sel)
                     sellBtn.contains(x, y) -> { e.sellTower(sel); selectedTower = null }
                     closeBtn.contains(x, y) -> selectedTower = null
@@ -506,7 +510,12 @@ class GameView @JvmOverloads constructor(
         tmpRect.set(cx - size * 0.42f, cy - size * 0.42f, cx + size * 0.42f, cy + size * 0.42f)
         c.drawRoundRect(tmpRect, size * 0.1f, size * 0.1f, fill)
         if (level >= 10) {
-            stroke.color = if (level >= 20) 0xFFFFD54F.toInt() else 0xFFB0BEC5.toInt()
+            stroke.color = when {
+                level >= 100 -> 0xFF00E5FF.toInt()
+                level >= 50 -> 0xFFFF8A65.toInt()
+                level >= 20 -> 0xFFFFD54F.toInt()
+                else -> 0xFFB0BEC5.toInt()
+            }
             stroke.strokeWidth = size * 0.04f
             c.drawRoundRect(tmpRect, size * 0.1f, size * 0.1f, stroke)
         }
@@ -580,11 +589,16 @@ class GameView @JvmOverloads constructor(
         // Level badge.
         if (level > 1) {
             text.textAlign = Paint.Align.CENTER
-            text.textSize = size * 0.24f
+            text.textSize = size * (if (level >= 100) 0.17f else 0.24f)
             fill.color = 0xCC000000.toInt()
             val bx = cx + size * 0.3f; val by = cy + size * 0.3f
             c.drawCircle(bx, by, size * 0.15f, fill)
-            text.color = if (level >= 20) 0xFFFFD54F.toInt() else Color.WHITE
+            text.color = when {
+                level >= 100 -> 0xFF00E5FF.toInt()
+                level >= 50 -> 0xFFFF8A65.toInt()
+                level >= 20 -> 0xFFFFD54F.toInt()
+                else -> Color.WHITE
+            }
             c.drawText(level.toString(), bx, by - (text.ascent() + text.descent()) / 2f, text)
             text.color = Color.WHITE
         }
@@ -841,7 +855,7 @@ class GameView @JvmOverloads constructor(
                 e.gold >= type.cost -> 0xFFFFD54F.toInt()
                 else -> 0xFFE57373.toInt()
             }
-            val sub = if (available) "${type.cost}g · ${type.role}" else "\uD83D\uDD12 Premium · ${type.role}"
+            val sub = if (available) "${GoldFormat.compact(type.cost)}g · ${type.role}" else "\uD83D\uDD12 Premium · ${type.role}"
             c.drawText(sub, tx, r.top + r.height() * 0.75f, text)
         }
         c.restore()
@@ -870,8 +884,8 @@ class GameView @JvmOverloads constructor(
         val rows = ArrayList<Pair<String, String>>()
         when (type.attack) {
             Attack.PULSE -> {}
-            Attack.BEAM -> rows += "DPS" to "%.0f".format(s.damage)
-            else -> rows += "Dmg" to "%.0f".format(s.damage)
+            Attack.BEAM -> rows += "DPS" to GoldFormat.compact(s.damage)
+            else -> rows += "Dmg" to GoldFormat.compact(s.damage)
         }
         rows += "Rng" to "%.2f".format(s.range)
         rows += "Rate" to fmtRate(s, type)
@@ -913,24 +927,28 @@ class GameView @JvmOverloads constructor(
         }
         text.textSize = small
         text.color = 0xFFB0BEC5.toInt()
-        c.drawText("Invested ${t.invested}g", left, upgradeBtn.top - small * 0.6f, text)
+        c.drawText("Invested ${GoldFormat.compact(t.invested)}g", left, upgradeBtn.top - small * 0.6f, text)
         text.color = Color.WHITE
 
         if (t.isMaxLevel) {
             drawButton(c, upgradeBtn, "MAX LEVEL", 0xFF555555.toInt(), false, 0.34f)
             drawButton(c, upgrade5Btn, "x5", 0xFF555555.toInt(), false, 0.34f)
+            drawButton(c, upgrade10Btn, "x10", 0xFF555555.toInt(), false, 0.34f)
             drawButton(c, upgradeMaxBtn, "Max", 0xFF555555.toInt(), false, 0.34f)
         } else {
             val c1 = t.upgradeCost
-            drawButton(c, upgradeBtn, "Upgrade → L${t.level + 1}  ${GoldFormat.compact(c1.toLong())}g", 0xFF1565C0.toInt(), e.gold >= c1, 0.34f)
-            val n5 = min(5, Tower.MAX_LEVEL - t.level)
+            drawButton(c, upgradeBtn, "Upgrade → L${t.level + 1}  ${GoldFormat.compact(c1)}g", 0xFF1565C0.toInt(), e.gold >= c1, 0.34f)
+            val n5 = e.bulkLevels(t, 5)
             val c5 = t.bulkCost(n5)
-            drawButton(c, upgrade5Btn, "x$n5 ${GoldFormat.compact(c5.toLong())}g", 0xFF0D47A1.toInt(), e.gold >= c5, 0.34f)
+            drawButton(c, upgrade5Btn, "x$n5 ${GoldFormat.compact(c5)}g", 0xFF0D47A1.toInt(), e.gold >= c5, 0.30f)
+            val n10 = e.bulkLevels(t, 10)
+            val c10 = t.bulkCost(n10)
+            drawButton(c, upgrade10Btn, "x$n10 ${GoldFormat.compact(c10)}g", 0xFF0D47A1.toInt(), e.gold >= c10, 0.30f)
             val nMax = t.maxAffordable(e.gold)
             val cMax = t.bulkCost(nMax)
-            drawButton(c, upgradeMaxBtn, if (nMax > 0) "Max +$nMax ${GoldFormat.compact(cMax.toLong())}g" else "Max", 0xFF0D47A1.toInt(), nMax > 0, 0.34f)
+            drawButton(c, upgradeMaxBtn, if (nMax > 0) "Max +$nMax ${GoldFormat.compact(cMax)}g" else "Max", 0xFF0D47A1.toInt(), nMax > 0, 0.30f)
         }
-        drawButton(c, sellBtn, "Sell +${t.sellValue}g", 0xFFC62828.toInt(), true, 0.34f)
+        drawButton(c, sellBtn, "Sell +${GoldFormat.compact(t.sellValue)}g", 0xFFC62828.toInt(), true, 0.34f)
         drawButton(c, closeBtn, "Close", 0xFF455A64.toInt(), true, 0.34f)
     }
 

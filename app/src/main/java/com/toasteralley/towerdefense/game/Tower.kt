@@ -1,6 +1,6 @@
 package com.toasteralley.towerdefense.game
 
-import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 class Tower(
     val type: TowerType,
@@ -11,7 +11,7 @@ class Tower(
     var level = 1
         private set
     /** Total gold spent on this tower (build + upgrades); used for sell value. */
-    var invested = type.cost
+    var invested: Long = type.cost.toLong()
         private set
     var cooldown = 0f
     /** Barrel angle in radians, for rendering. */
@@ -44,10 +44,10 @@ class Tower(
     val isMaxLevel: Boolean get() = level >= MAX_LEVEL
 
     /** Cost of the next upgrade, or -1 if already at max level. */
-    val upgradeCost: Int get() = if (isMaxLevel) -1 else UpgradeCosts.costToReach(type, level + 1)
+    val upgradeCost: Long get() = if (isMaxLevel) -1L else UpgradeCosts.costToReach(type, level + 1)
 
     /** Total cost of the next [count] upgrades (clamped at max level). */
-    fun bulkCost(count: Int): Int = UpgradeCosts.costRange(type, level, (level + count).coerceAtMost(MAX_LEVEL))
+    fun bulkCost(count: Int): Long = UpgradeCosts.costRange(type, level, (level + count).coerceAtMost(MAX_LEVEL))
 
     /** How many levels [gold] can buy in a row, starting from the current level. */
     fun maxAffordable(gold: Long): Int {
@@ -55,17 +55,17 @@ class Tower(
         var spent = 0L
         while (level + n < MAX_LEVEL) {
             val c = UpgradeCosts.costToReach(type, level + n + 1)
-            if (spent + c > gold) break
+            if (c > gold - spent) break
             spent += c
             n++
         }
         return n
     }
 
-    val sellValue: Int get() = (invested * SELL_REFUND).roundToInt()
+    val sellValue: Long get() = (invested * SELL_REFUND.toDouble()).roundToLong()
 
-    fun applyUpgrade(cost: Int) {
-        invested += cost
+    fun applyUpgrade(cost: Long) {
+        invested = (invested + cost).coerceAtMost(WaveDefinitions.MAX_GOLD)
         level++
         stats = TowerStats.of(type, level, modifiers)
     }

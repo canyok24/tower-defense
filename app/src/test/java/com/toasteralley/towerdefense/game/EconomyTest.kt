@@ -97,9 +97,44 @@ class EconomyTest {
             assertTrue(p.spawns.all { it.bounty in 1..WaveDefinitions.MAX_GOLD })
             assertTrue(p.spawns.all { it.speedMult <= WaveDefinitions.SPEED_CAP })
         }
-        // At 100,000 the economy is still unclamped and on target.
-        val p = WaveDefinitions.plan(100_000)
-        assertEquals(WaveDefinitions.targetRatio(100_000), p.ratio, 1e-3)
+        // At 10,000 the economy is still unclamped and on target.
+        val p = WaveDefinitions.plan(10_000)
+        assertEquals(WaveDefinitions.targetRatio(10_000), p.ratio, 1e-3)
+        // At 100,000 base income is pinned at the MAX_GOLD clamp (Long-safe): finite, below parity.
+        val far = WaveDefinitions.plan(100_000)
+        assertEquals(WaveDefinitions.MAX_GOLD, far.income)
+        assertTrue(far.ratio.isFinite() && far.ratio > 0.0 && far.ratio <= WaveDefinitions.targetRatio(100_000))
+    }
+
+    @Test
+    fun costToKillFollowsTheDeepUpgradePath() {
+        // Continuous and strictly increasing in required DPS, across all three regimes.
+        var prev = 0.0
+        var dps = 1.0
+        while (dps < 1e12) {
+            val c = WaveDefinitions.referenceBuildCost(dps)
+            assertTrue("dps=$dps c=$c", c.isFinite() && c > prev)
+            prev = c
+            dps *= 1.07
+        }
+        val n = WaveDefinitions.REFERENCE_TOWERS
+        val d1 = WaveDefinitions.REFERENCE_DPS[1] * n
+        assertEquals(n * 50.0, WaveDefinitions.referenceBuildCost(d1), 1e-6)
+        // Exactly the cumulative Arrow investment at each whole level.
+        for (l in listOf(13, 20, 48, 100)) {
+            val d = WaveDefinitions.REFERENCE_DPS[l] * n
+            val invest = TowerType.ARROW.cost + UpgradeCosts.costRange(TowerType.ARROW, 1, l)
+            assertEquals(n * invest.toDouble(), WaveDefinitions.referenceBuildCost(d), n * invest * 1e-9)
+        }
+        // The reference build climbs the upgrade path as waves deepen (gold has a sink).
+        assertEquals(1, WaveDefinitions.referenceLevelFor(WaveDefinitions.plan(1).let { it.effectiveHp / it.duration }))
+        val lvl100 = WaveDefinitions.referenceLevelFor(WaveDefinitions.plan(100).let { it.effectiveHp / it.duration })
+        assertTrue("w100 level $lvl100", lvl100 in 25..60)
+        val lvl300 = WaveDefinitions.referenceLevelFor(WaveDefinitions.plan(300).let { it.effectiveHp / it.duration })
+        assertTrue("w300 level $lvl300", lvl300 in 70..100)
+        // Much more expensive than a level-1-only estimate once the tile budget is full.
+        val p100 = WaveDefinitions.plan(100)
+        assertTrue(p100.costToKill > 50 * p100.effectiveHp / p100.duration / WaveDefinitions.REFERENCE_DPS_PER_GOLD)
     }
 
     // ------------------------------------------------------------ engine: endless + milestone
