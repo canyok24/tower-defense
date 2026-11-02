@@ -1,6 +1,6 @@
 <resources>
-    <string name="app_name">Tower Defense</string>
-    <string name="menu_title">TOWER DEFENSE</string>
+    <string name="app_name">The Last Wall</string>
+    <string name="menu_title">THE LAST WALL</string>
     <string name="menu_subtitle">Hold the line for 20 waves</string>
     <string name="play">Play</string>
     <string name="store">Store</string>

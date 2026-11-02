@@ -1,6 +1,6 @@
-# Tower Defense (Android)
+# The Last Wall (Android)
 
-A complete, self-contained tower defense game for Android written in Kotlin.
+**The Last Wall** is a complete, self-contained tower defense game for Android written in Kotlin.
 Rendering uses a custom `SurfaceView` game loop and plain `Canvas` drawing — no
 third-party game engine. Includes Google Play Billing (non-consumable in-app
 products) and a banner-ad abstraction with optional AdMob (test IDs).
@@ -244,7 +244,7 @@ tower-defense/
 │       ├── main/
 │       │   ├── AndroidManifest.xml
 │       │   ├── java/com/toasteralley/towerdefense/
-│       │   │   ├── TowerDefenseApp.kt     # Application: billing + ads init
+│       │   │   ├── LastWallApp.kt         # Application: billing + ads init
 │       │   │   ├── SettingsStore.kt       # sound toggle
 │       │   │   ├── SoundManager.kt        # ToneGenerator SFX
 │       │   │   ├── game/
@@ -316,7 +316,7 @@ How to play: tap a tower on the right panel (drag to scroll), then tap a grass t
 
 ```bash
 keytool -genkeypair -v \
-  -keystore ~/keys/towerdefense-upload.jks \
+  -keystore ~/keys/lastwall-upload.jks \
   -alias upload -keyalg RSA -keysize 2048 -validity 10000
 ```
 
@@ -336,7 +336,7 @@ Store it **outside the repo** and back it up. **Never commit a keystore or its p
 Example `keystore.properties` (do not commit):
 
 ```properties
-RELEASE_STORE_FILE=/home/me/keys/towerdefense-upload.jks
+RELEASE_STORE_FILE=/home/me/keys/lastwall-upload.jks
 RELEASE_STORE_PASSWORD=********
 RELEASE_KEY_ALIAS=upload
 RELEASE_KEY_PASSWORD=********
@@ -403,7 +403,7 @@ Never click your own live ads; register test devices in AdMob. For EEA/UK users 
 
 ## How the Billing integration works
 
-`BillingManager` (one instance in `TowerDefenseApp`):
+`BillingManager` (one instance in `LastWallApp`):
 
 1. Built with PBL 8 options: `enablePendingPurchases(PendingPurchasesParams…enableOneTimeProducts())` and `enableAutoServiceReconnection()`. `startConnection()` runs on app start; an extra back-off retry (1 s → 60 s) refreshes data after disconnects.
 2. On connect: `queryProductDetailsAsync()` for both INAPP products — PBL 8 returns a `QueryProductDetailsResult` whose `unfetchedProductList` is logged (usually means the product isn't created/active in Play Console) — then `restorePurchases()` via `queryPurchasesAsync` (PBL 8 removed `queryPurchaseHistory`; it's not used).
