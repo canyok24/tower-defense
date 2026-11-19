@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Emberwatch: steel watchtower holding a coral ember. Same paths as tools/render_icons.py. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#4A6F8A" android:pathData="M42,82 L66,82 L62,50 L46,50 Z" />
+    <path android:fillColor="#8FB3CC" android:pathData="M43,50 L65,50 L65,44 L61,44 L61,47 L57,47 L57,44 L51,44 L51,47 L47,47 L47,44 L43,44 Z" />
+    <path android:fillColor="#4A6F8A" android:pathData="M36,82 L72,82 L72,86 L36,86 Z" />
+    <path android:fillColor="#0B0E13" android:pathData="M51,82 L51,75 C51,72 57,72 57,75 L57,82 Z" />
+    <path android:fillColor="#D9776A" android:pathData="M54,20 C61,28 64,34 61,39 C59,42 57,43 54,43 C51,43 48,42 47,38 C46,34 49,31 51,27 C52,30 53,31 54,32 C55,28 55,25 54,20 Z" />
+    <path android:fillColor="#F0B3A0" android:pathData="M54,32 C56,35 58,38 56,40 C55,41 53,41 52,40 C50,38 52,35 54,32 Z" />
+</vector>

@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Emberwatch</string>
+    <string name="menu_title">EMBERWATCH</string>
+    <string name="menu_subtitle">Keep the ember lit. The shapes never stop.</string>
+    <string name="battle">Battle</string>
+    <string name="settings">Settings</string>
+</resources>

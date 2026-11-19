@@ -1,0 +1,11 @@
+<resources>
+    <!-- Emberwatch palette: cold black / steel blue / muted coral -->
+    <color name="ember_black">#FF0B0E13</color>
+    <color name="ember_panel">#FF141A22</color>
+    <color name="steel">#FF4A6F8A</color>
+    <color name="steel_light">#FF8FB3CC</color>
+    <color name="coral">#FFD9776A</color>
+    <color name="coral_dim">#FF9E5249</color>
+    <color name="text">#FFE6EDF3</color>
+    <color name="ic_launcher_background">#FF0B0E13</color>
+</resources>

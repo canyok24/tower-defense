@@ -1,0 +1,26 @@
+{
+  "name": "Emberwatch",
+  "short_name": "Emberwatch",
+  "tagline": "Keep the ember lit. The shapes never stop.",
+  "description": "Emberwatch is a vertical tower defense game for Android: one watchtower at the bottom of the screen holds off endless waves of geometric shapes, with a Spiral Boss every 10 waves, a Workshop, Research Bay, Ultimate Weapons, Diamond Perks and a global Enhancement multiplier.",
+  "package": "com.toasteralley.emberwatch",
+  "play_store_url": "https://play.google.com/store/apps/details?id=com.toasteralley.emberwatch",
+  "colors": {
+    "background": "#0B0E13",
+    "panel": "#141A22",
+    "steel": "#4A6F8A",
+    "steel_light": "#8FB3CC",
+    "coral": "#D9776A",
+    "coral_dim": "#9E5249",
+    "text": "#E6EDF3"
+  },
+  "theme_color": "#0B0E13",
+  "icons": {
+    "svg": "/icons/icon.svg",
+    "192": "/icons/icon-192.png",
+    "512": "/icons/icon-512.png",
+    "maskable_512": "/icons/icon-maskable-512.png",
+    "apple_touch": "/icons/apple-touch-icon.png"
+  },
+  "og_image": "/icons/icon-512.png"
+}
