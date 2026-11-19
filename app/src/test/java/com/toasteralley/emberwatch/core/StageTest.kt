@@ -70,8 +70,8 @@ class StageTest {
 
     @Test fun stageMultipliersApplyToEngineAndBounty() {
         val stats = SaveData()
-        val e1 = GameEngine(stats, emptyMap(), 1.0, stage = 1, seed = 4)
-        val e5 = GameEngine(stats, emptyMap(), 1.0, stage = 5, seed = 4)
+        val e1 = GameEngine(stats, UltimateLoadout.NONE, 1.0, stage = 1, seed = 4)
+        val e5 = GameEngine(stats, UltimateLoadout.NONE, 1.0, stage = 5, seed = 4)
         val m1 = e1.spawnMob(MobShape.ELLIPSE); val m5 = e5.spawnMob(MobShape.ELLIPSE)
         assertEquals(m1.maxHp * StageDefinitions.get(5).hpMult, m5.maxHp, 1e-6)
         assertTrue(m5.speed > m1.speed)

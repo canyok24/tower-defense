@@ -91,7 +91,7 @@ class MasteryTest {
         assertTrue(b.fireRate <= TowerStats.MAX_FIRE_RATE)
         assertTrue(b.effectiveRegen() <= 0.028 * b.maxHealth + 1e-9)
         // Bounty Gain Mastery reaches the engine's Bounty pipeline
-        val e = GameEngine(s, emptyMap(), 1.0, seed = 1)
+        val e = GameEngine(s, UltimateLoadout.NONE, 1.0, seed = 1)
         val mob = e.spawnMob(MobShape.ELLIPSE, 0.5f, 0.5f)
         e.hit(mob, 1e300)
         assertEquals(mob.bounty * b.bountyGain, e.runBounty, mob.bounty * b.bountyGain * 1e-9)

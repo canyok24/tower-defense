@@ -9,6 +9,8 @@ data class StageReward(
     val cores: Long,
     /** Permanent bounty bonus as a fraction (0.02 = x1.02), stacked multiplicatively. */
     val bountyBonus: Double,
+    /** Stones awarded by GameEvents with this reward (run end). */
+    val stones: Long = 0,
 )
 
 data class StageMilestone(val wave: Int, val reward: StageReward)

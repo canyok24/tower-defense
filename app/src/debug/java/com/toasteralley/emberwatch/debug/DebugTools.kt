@@ -23,7 +23,7 @@ object DebugTools {
     fun openInGame(activity: Activity, hooks: InGameDebug) {
         if (!BuildConfig.DEBUG) { hooks.resume(); return }
         val items = arrayOf("+1 wave", "+10 waves", "Jump to wave N…", "Force-spawn Spiral Boss",
-            "God mode: ${if (hooks.godMode()) "ON → turn off" else "OFF → turn on"}", "+1M cash", "Full heal")
+            "God mode: ${if (hooks.godMode()) "ON → turn off" else "OFF → turn on"}", "+1M cash", "Full heal", "Trigger an Ultimate now…")
         AlertDialog.Builder(activity).setTitle("Management override")
             .setItems(items) { _, which ->
                 when (which) {
@@ -34,6 +34,12 @@ object DebugTools {
                     4 -> hooks.setGodMode(!hooks.godMode())
                     5 -> hooks.addCash(1_000_000.0)
                     6 -> hooks.heal()
+                    7 -> {
+                        AlertDialog.Builder(activity).setTitle("Trigger Ultimate").setItems(hooks.ultimateNames().toTypedArray()) { _, i ->
+                            hooks.triggerUltimate(i); hooks.resume()
+                        }.setOnCancelListener { hooks.resume() }.show()
+                        return@setItems
+                    }
                 }
                 hooks.resume()
             }

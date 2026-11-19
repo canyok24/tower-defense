@@ -51,7 +51,6 @@ class EconomyTest {
             assertTrue(u.name, u.bountyCost(40) / u.bountyCost(30) > 3.0)
         }
         for (p in DiamondPerk.entries) for (l in 0 until p.maxLevel) assertTrue(p.cost(l + 1) > p.cost(l))
-        for (u in UltimateWeapon.entries) assertEquals(20L, u.cost(0))
     }
 
     @Test fun compactFormat() {

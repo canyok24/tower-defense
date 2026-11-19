@@ -60,6 +60,10 @@ object Palette {
     const val CORAL_DIM = 0xFF9E5249.toInt()
     const val TEXT = 0xFFE6EDF3.toInt()
     const val TEXT_DIM = 0xFF8792A0.toInt()
+    // Ultimate Weapon accents (cheap primitives)
+    const val GOLD = 0xFFE3C77A.toInt()
+    const val SWAMP = 0xFF7A9E5E.toInt()
+    const val VOID = 0xFF05070A.toInt()
 
     /** 20 mob tints, desaturated to sit on the cold-black field. */
     val MOB_COLORS: IntArray = intArrayOf(

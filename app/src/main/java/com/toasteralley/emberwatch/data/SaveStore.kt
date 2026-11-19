@@ -43,7 +43,12 @@ class SaveStore(context: Context) {
             put("stageMilestonesClaimed", JSONObject(d.stageMilestonesClaimed.mapKeys { it.key.toString() } as Map<*, *>))
             put("workshop", JSONObject(d.workshop as Map<*, *>))
             put("perks", JSONObject(d.perks as Map<*, *>))
-            put("ultimates", JSONObject(d.ultimates as Map<*, *>))
+            put("stones", d.stones)
+            put("uwUnlockOrder", JSONArray(d.uwUnlockOrder))
+            put("uwStats", JSONObject(d.uwStats as Map<*, *>))
+            put("uwPlus", JSONArray(d.uwPlus.toList()))
+            put("awardedEvents", JSONArray(d.awardedEvents.toList()))
+            put("processedStoneTokens", JSONArray(d.processedStoneTokens))
             put("research", JSONObject(d.research as Map<*, *>))
             put("enhancement", d.enhancement)
             put("activeResearch", JSONArray().apply {
@@ -79,7 +84,8 @@ class SaveStore(context: Context) {
             val from = j.optInt("version", 1)
             return if (from < SaveData.CURRENT_VERSION) SaveMigrations.migrate(d, from,
                 LegacyFields(unlockedTier = j.optInt("unlockedTier", 1), selectedTier = j.optInt("selectedTier", 1),
-                    coins = if (j.has("coins")) j.optDouble("coins", 0.0).takeUnless { it.isNaN() } else null))
+                    coins = if (j.has("coins")) j.optDouble("coins", 0.0).takeUnless { it.isNaN() } else null,
+                    oldUltimates = mutableMapOf<String, Int>().also { j.intMap("ultimates", it) }))
             else SaveMigrations.normalize(d)
         }
 
@@ -91,7 +97,12 @@ class SaveStore(context: Context) {
             selectedStage = j.optInt("selectedStage", 1); legacyUnlockedStage = j.optInt("legacyUnlockedStage", 1)
             j.stageMap("stageBestWave", stageBestWave); j.stageMap("stageMilestonesClaimed", stageMilestonesClaimed)
             j.intMap("workshop", workshop); j.intMap("perks", perks)
-            j.intMap("ultimates", ultimates); j.intMap("research", research)
+            j.intMap("research", research)
+            stones = j.optLong("stones")
+            fun strings(key: String): List<String> = j.optJSONArray(key)?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList()
+            uwUnlockOrder += strings("uwUnlockOrder").filter { n -> com.toasteralley.emberwatch.core.Ultimate.entries.any { it.name == n } }.distinct()
+            j.intMap("uwStats", uwStats)
+            uwPlus += strings("uwPlus"); awardedEvents += strings("awardedEvents"); processedStoneTokens += strings("processedStoneTokens")
             enhancement = j.optInt("enhancement")
             j.optJSONArray("activeResearch")?.let { arr ->
                 for (i in 0 until arr.length()) {

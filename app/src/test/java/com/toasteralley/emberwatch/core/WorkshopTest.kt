@@ -76,7 +76,7 @@ class WorkshopTest {
     @Test fun highFireRateFiresSeveralShotsPerStep() {
         val s = SaveData().apply { workshop[Upgrade.ATTACK_SPEED.name] = 1000; workshop[Upgrade.DAMAGE.name] = 0 }
         assertEquals(40.0, TowerStats.resolve(s).fireRate, 1e-9)
-        val e = GameEngine(s, emptyMap(), 1.0, seed = 7, godMode = true)
+        val e = GameEngine(s, UltimateLoadout.NONE, 1.0, seed = 7, godMode = true)
         val m = e.spawnMob(MobShape.ELLIPSE, 0.5f, e.towerY - 0.6f); m.hp = 1e300
         repeat(600) { e.step() }                               // 10 s
         assertTrue("shots=${e.shotsFired}", e.shotsFired in 380..420)
@@ -121,7 +121,7 @@ class WorkshopTest {
         assertEquals(a.maxHealth * 0.01, a.regenPerSec, 1e-9)
         assertEquals(b.regenPerSec / a.regenPerSec, b.maxHealth / a.maxHealth, 1e-9)
         // regen is flat HP/s in the engine
-        val e = GameEngine(base, emptyMap(), 1.0, seed = 1, godMode = false)
+        val e = GameEngine(base, UltimateLoadout.NONE, 1.0, seed = 1, godMode = false)
         e.hurtTower(e.maxHealth * 0.5, piercing = true)
         val h = e.health
         repeat(60) { e.step() }
@@ -132,7 +132,7 @@ class WorkshopTest {
         val c = TowerStats.resolve(capped)
         assertTrue(c.regenPerSec > 0.028 * c.maxHealth)
         assertEquals(0.028 * c.maxHealth, c.effectiveRegen(), 1e-12)
-        val ec = GameEngine(capped, emptyMap(), 1.0, seed = 1)
+        val ec = GameEngine(capped, UltimateLoadout.NONE, 1.0, seed = 1)
         ec.hurtTower(ec.maxHealth * 0.9, piercing = true)
         val hc = ec.health
         repeat(60) { ec.step() }
@@ -155,7 +155,7 @@ class WorkshopTest {
 
     @Test fun permanentAndRunLevelsStack() {
         val s = SaveData().apply { bounty = 1e6; workshop[Upgrade.DAMAGE.name] = 10 }
-        val e = GameEngine(s, emptyMap(), 1.0, seed = 1)
+        val e = GameEngine(s, UltimateLoadout.NONE, 1.0, seed = 1)
         val before = e.stats.damage
         assertEquals(TowerStats.resolve(s).damage, before, 1e-9)
         e.debugAddCash(1e6)
@@ -163,11 +163,11 @@ class WorkshopTest {
         assertEquals(11, e.totalLevel(Upgrade.DAMAGE))
         assertEquals(Upgrade.DAMAGE.value(11) * e.stats.enhancement, e.stats.damage, 1e-9)
         assertEquals(10, s.level(Upgrade.DAMAGE)) // permanent untouched; run levels reset with the next engine
-        assertEquals(0, GameEngine(s, emptyMap(), 1.0).runLevel(Upgrade.DAMAGE))
+        assertEquals(0, GameEngine(s, UltimateLoadout.NONE, 1.0).runLevel(Upgrade.DAMAGE))
         // gate + max respected in-run
         assertEquals(BuyResult.LOCKED, e.buyRunUpgrade(Upgrade.SUPER_CRIT))
         s.workshop[Upgrade.RANGE.name] = Upgrade.RANGE.maxLevel
-        assertEquals(BuyResult.MAXED, GameEngine(s, emptyMap(), 1.0).buyRunUpgrade(Upgrade.RANGE))
+        assertEquals(BuyResult.MAXED, GameEngine(s, UltimateLoadout.NONE, 1.0).buyRunUpgrade(Upgrade.RANGE))
         // permanent purchase with bounty
         assertTrue(Workshop.buy(Upgrade.HULL_INTEGRITY, s, false))
         assertEquals(1, s.level(Upgrade.HULL_INTEGRITY))
@@ -176,7 +176,7 @@ class WorkshopTest {
 
     @Test fun freeUpgradeChanceApplied() {
         val s = SaveData().apply { bestWave = 100; workshop[Upgrade.FREE_ASSAULT.name] = 50 }
-        val e = GameEngine(s, emptyMap(), 1.0, seed = 42)
+        val e = GameEngine(s, UltimateLoadout.NONE, 1.0, seed = 42)
         e.debugAddCash(1e300)
         var spent = 0.0; var free = 0
         repeat(400) {
@@ -191,7 +191,7 @@ class WorkshopTest {
 
     @Test fun enemyDegradeLowersStatWave() {
         val s = SaveData().apply { workshop[Upgrade.ENEMY_DEGRADE.name] = 50 }
-        val e = GameEngine(s, emptyMap(), 1.0, startWave = 100, seed = 3)
+        val e = GameEngine(s, UltimateLoadout.NONE, 1.0, startWave = 100, seed = 3)
         val mobs = (1..400).map { e.spawnMob(MobShape.ELLIPSE) }
         val degraded = mobs.filter { it.statWave < 100 }
         assertTrue(degraded.size in 140..260)                      // ~50%
@@ -201,13 +201,13 @@ class WorkshopTest {
         assertTrue(low.maxHp < full.maxHp)
         assertEquals(WaveRules.hpScale(low.statWave) * WaveRules.veteran(MobProfiles.of(MobShape.ELLIPSE), low.statWave).hp, low.maxHp, low.maxHp * 1e-9)
         assertEquals(full.bounty, low.bounty, 1e-9)                  // rewards stay at the current wave
-        val none = GameEngine(SaveData(), emptyMap(), 1.0, startWave = 100, seed = 3)
+        val none = GameEngine(SaveData(), UltimateLoadout.NONE, 1.0, startWave = 100, seed = 3)
         assertTrue((1..200).all { none.spawnMob(MobShape.ELLIPSE).statWave == 100 })
     }
 
     @Test fun bountyAndTributeInPipelines() {
         val s = SaveData().apply { workshop[Upgrade.BOUNTY_GAIN.name] = 10; workshop[Upgrade.TRIBUTE.name] = 20 }
-        val e = GameEngine(s, emptyMap(), bountyMultiplier = 3.0, seed = 1)
+        val e = GameEngine(s, UltimateLoadout.NONE, bountyMultiplier = 3.0, seed = 1)
         val m = e.spawnMob(MobShape.ELLIPSE, 0.5f, 0.5f)
         val cash0 = e.cash
         e.hit(m, 1e12)
@@ -220,7 +220,7 @@ class WorkshopTest {
             var n = 0
             repeat(1000) { seed ->
                 val s = SaveData().apply { workshop[Upgrade.LAST_STAND.name] = level }
-                val e = GameEngine(s, emptyMap(), 1.0, seed = seed.toLong())
+                val e = GameEngine(s, UltimateLoadout.NONE, 1.0, seed = seed.toLong())
                 e.hurtTower(e.maxHealth * 10, piercing = true)
                 if (e.health > 0) { n++; assertEquals(maxOf(1.0, e.maxHealth * 0.01), e.health, 1e-9) }
             }
@@ -232,7 +232,7 @@ class WorkshopTest {
 
     @Test fun wallAbsorbsBeforeTower() {
         val s = SaveData().apply { workshop[Upgrade.FORTIFICATION.name] = 10 }   // wall = 50% of max HP
-        val e = GameEngine(s, emptyMap(), 1.0, seed = 1)
+        val e = GameEngine(s, UltimateLoadout.NONE, 1.0, seed = 1)
         assertEquals(e.maxHealth * 0.5, e.wallHp, 1e-9)
         val hp0 = e.health
         e.hurtTower(e.maxHealth * 0.3, piercing = false)
@@ -243,7 +243,7 @@ class WorkshopTest {
         assertEquals(hp0 - e.maxHealth * 0.1, e.health, 1e-9)
         assertTrue(e.wallLineY < e.towerLineY)
         // contact mobs stop at the wall while it stands
-        val e2 = GameEngine(s, emptyMap(), 1.0, seed = 2)
+        val e2 = GameEngine(s, UltimateLoadout.NONE, 1.0, seed = 2)
         val m = e2.spawnMob(MobShape.ARROWHEAD, 0.5f, e2.worldH * 0.5f)
         repeat(60 * 20) { e2.step() }
         if (m.alive && m.engaged && e2.wallUp) assertTrue(m.y <= e2.wallLineY)
@@ -251,7 +251,7 @@ class WorkshopTest {
 
     @Test fun platingAndCounterfire() {
         val s = SaveData().apply { workshop[Upgrade.PLATING.name] = 10; workshop[Upgrade.COUNTERFIRE.name] = 50 }
-        val e = GameEngine(s, emptyMap(), 1.0, seed = 1)
+        val e = GameEngine(s, UltimateLoadout.NONE, 1.0, seed = 1)
         val abs = Upgrade.PLATING.value(10)
         val m = e.spawnMob(MobShape.ROUNDED_RECT, 0.5f, 1.0f)
         val hp0 = e.health; val mobHp = m.hp + m.shield
@@ -264,7 +264,7 @@ class WorkshopTest {
 
     @Test fun recoveryCappedByMaxRecovery() {
         val s = SaveData().apply { workshop[Upgrade.RECOVERY_AMOUNT.name] = 50 }  // 50%, max recovery 10%
-        val e = GameEngine(s, emptyMap(), 1.0, seed = 1, startWave = 1)
+        val e = GameEngine(s, UltimateLoadout.NONE, 1.0, seed = 1, startWave = 1)
         e.hurtTower(e.maxHealth * 0.6, piercing = true)
         val hp = e.health
         repeat(60 * 40) { if (e.wave == 1) e.step() }

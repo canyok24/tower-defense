@@ -55,11 +55,7 @@ Package: `com.toasteralley.emberwatch` · minSdk 24 · target/compile SDK 35 · 
 
 **Progression menus (each is its own screen)**
 1. **Workshop.** Three tabs, ASSAULT (10 upgrades), SHIELD (13) and LEDGER (9). Bounty buys permanent levels between runs; Cash buys temporary levels of the same upgrades during a run. See [Workshop](#workshop-assault--shield--ledger).
-2. **Ultimate Weapons.** Unlocked and upgraded with Diamonds, opening at wave 20. They fire automatically on a cooldown during a run:
-   - Ember Nova: area damage near the wall
-   - Frost Lattice: slows every mob on the field
-   - Chain Arc: chain lightning through several mobs
-   - Gravity Well: drags mobs back toward the top and damages them
+2. **Ultimates.** The fourth Workshop tab (next to ASSAULT / SHIELD / LEDGER, also on the main menu), opening at wave 20. Nine Ultimate Weapons unlocked and upgraded with **Stones**; they fire automatically on their cooldown during a run. See [Ultimates and Stones](#ultimates-and-stones). (The old Diamond UWs were removed in 1.3.0 and their Diamonds refunded.)
 3. **Diamond Perks.** Paid with Diamonds, opening at wave 15: damage multiplier, health multiplier, crit-rate multiplier, critical factor, advanced crit rate, advanced crit factor, and super crits (a chance to crit again on a crit, with its own factor).
 4. **Enhancement.** One global multiplier that applies on top of every other window. It opens at wave 30, is capped at **level 1,000**, and is very expensive. See the formula and cost curve below.
 5. **Research Bay.** (Separate from the endgame [Research tab](#research-tab-mastery).) Its own currency (Research Cores) plus Bounty. Timers run on the real wall clock and keep going while the app is closed. Projects are gated by best wave, and 2 run at once (Bay Expansion research raises this to 4).
@@ -67,7 +63,7 @@ Package: `com.toasteralley.emberwatch` · minSdk 24 · target/compile SDK 35 · 
    - The other projects are Starting Cash, Ember Rounds (damage), Hull Integrity Research (health), Rapid Breech (fire rate), Projectile Velocity, Bounty Ledger (Bounty bonus), Core Siphon (core yield) and Bay Expansion.
 6. **Bounty multipliers.** Owned packs, a 1.5x rewarded-ad boost, Bounty Ledger research, the Enhancement multiplier, the selected Stage's Bounty multiplier and your permanent Stage milestone Bounty bonuses all multiply together and apply to every Bounty source: kills, wave bonuses and boss rewards. A rewarded ad adds 20 minutes of 1.5x, stacking up to 2 hours on the wall clock and saved across restarts. Starting Cash research raises your opening run cash.
 
-**Store (Google Play Billing, one-time non-consumables)**
+**Store (Google Play Billing: five one-time non-consumables + three consumable Stone packs)**
 
 | Product id   | Suggested price | Effect |
 |--------------|-----------------|--------|
@@ -78,6 +74,14 @@ Package: `com.toasteralley.emberwatch` · minSdk 24 · target/compile SDK 35 · 
 | `pack_tier5` | $499.99 | 10x Bounty |
 
 The top pack is shown as $499.99 here and as the fallback label in the app. If you'd rather charge a flat $500, set it to **$500.00** in Play Console. The app always shows Play's localized price, so no code change is needed.
+
+Consumable Stone packs (see [Stones](#stones)):
+
+| Product id | Suggested price | Effect |
+|---|---|---|
+| `stones_small`  | $0.99  | +50 Stones |
+| `stones_medium` | $4.99  | +300 Stones |
+| `stones_large`  | $19.99 | +1500 Stones |
 
 All packs together give 1.5 × 2 × 3 × 4 × 10 = **360x**. Prices are set in Play Console, and the app shows `ProductDetails.formattedPrice`. A Restore Purchases button is included. Entitlements are stored separately from progress and are never wiped, not even by Settings → Reset progress.
 
@@ -169,7 +173,7 @@ Outputs:
 ## Publishing on Google Play Console
 1. **Create the app:** Play Console → *Create app*. Name it "Emberwatch", choose Game, set it to free, and accept the declarations. Use Play App Signing (the default), and the keystore above becomes your *upload* key.
 2. **Upload a first build to Internal testing:** *Testing → Internal testing → Create release* → upload `app-release.aab`. In-app products can only be created after an APK/AAB that includes the Billing permission has been uploaded.
-3. **Create the in-app products:** *Monetize → Products → In-app products*. Create five **one-time** products with exactly these ids: `no_ads`, `pack_epic`, `pack_tier3`, `pack_tier4`, `pack_tier5`. Set the prices ($4.99 / $19.99 / $39.99 / $149.99 / $499.99), titles and descriptions, then **Activate** each one. The app never consumes them, so they behave as permanent unlocks.
+3. **Create the in-app products:** *Monetize → Products → In-app products*. Create five **one-time** products with exactly these ids: `no_ads`, `pack_epic`, `pack_tier3`, `pack_tier4`, `pack_tier5`. Set the prices ($4.99 / $19.99 / $39.99 / $149.99 / $499.99), titles and descriptions, then **Activate** each one. The app never consumes them, so they behave as permanent unlocks. Also create the three Stone packs `stones_small`, `stones_medium`, `stones_large` ($0.99 / $4.99 / $19.99) as one-time products; the app **consumes** these after granting, so they can be bought again.
 4. **Testers:** add testers to the internal track (an email list), and add the same accounts under *Settings → License testing* so they can buy with test cards without being charged. Install the app from the internal-testing opt-in link. Sideloaded builds signed with a different key can't buy.
 5. **Store listing:** use the short and full descriptions (from `public/site.json`), the 512×512 icon (`public/icons/play-store-512.png`), a 1024×500 feature graphic and portrait phone screenshots.
 6. **App content:**
@@ -193,11 +197,13 @@ A hidden developer/admin menu for testing progression without grinding.
 - **Main menu:** press and hold the gear icon (top right) for **at least 2 seconds** and release. Then, within 10 seconds, tap the **EMBERWATCH** title **5 times within 3 seconds**.
 - **In a run:** hold the **II** (pause) button for 2 seconds and release. Then tap the **WAVE** label at top left 5 times within 3 seconds.
 
-**Main-menu override:** bypass all progression gates (menus, research gates, stages); unlock all 5 stages (access only, no rewards); **set the Enhancement level to anything from 0 to 100,000, even above the cap**, to test the enemy pools (for example 1500 adds dangerous shapes, 6000 adds everything); set the selected stage's best cleared wave (this pays its milestones); max all research or unlock only Light Speed Shots; unlock all Ultimate Weapons; max all Diamond Perks; complete running research timers now; set Bounty, Diamonds, Research Cores and best wave; start the next run at wave N; god mode; locally grant or revoke any store pack (not a real purchase).
+**Main-menu override:** bypass all progression gates (menus, research gates, stages); unlock all 5 stages (access only, no rewards); **set the Enhancement level to anything from 0 to 100,000, even above the cap**, to test the enemy pools (for example 1500 adds dangerous shapes, 6000 adds everything); set the selected stage's best cleared wave (this pays its milestones); max all research or unlock only Light Speed Shots; max all Diamond Perks; complete running research timers now; set Bounty, Diamonds, Research Cores and best wave; start the next run at wave N; god mode; locally grant or revoke any store pack (not a real purchase).
+
+**Ultimates override (main menu):** set Stones; unlock / lock each of the nine UWs (free, no Stones spent); unlock all nine; set any UW stat level; max all UW stats; unlock all nine Plus abilities; reset Ultimates.
 
 **Workshop override (main menu):** set any upgrade in any tab to any level (0..max), max one tab, max all three tabs, or reset the workshop.
 
-**In-run override:** +1 wave, +10 waves, jump to wave N, force-spawn the Spiral Boss, toggle god mode, +1M cash, full heal.
+**In-run override:** +1 wave, +10 waves, jump to wave N, force-spawn the Spiral Boss, toggle god mode, +1M cash, full heal, **trigger any Ultimate now** (fires it immediately and restarts its cooldown; a locked UW is enabled for that run only).
 
 ---
 
@@ -301,6 +307,70 @@ A separate **Research** screen on the main menu, independent of the **Research B
 | Ledger | **Interest Per Wave Mastery** | +0.1% interest per level past the 10% cap, and +5% interest ceiling per level | 20 | 1e+15 × 1.50^L | 6 h × 1.12^L (max 14 days) |
 | Ledger | **Enemy Degrade Mastery** | Degraded enemies can drop +1 more wave per level | 10 | 3e+15 × 1.70^L | 12 h × 1.15^L (max 14 days) |
 
+## Ultimates and Stones
+
+### Stones
+A premium currency used only for Ultimate Weapons (shown in every screen header). Sources:
+- **In-app purchase** (consumable): `stones_small` 50, `stones_medium` 300, `stones_large` 1500. The Store shows Play's formatted price (`ProductDetails.oneTimePurchaseOfferDetails.formattedPrice`, fallback to the suggested price). On a PURCHASED update the Stones are granted **first** (idempotent by purchase token, `StonePacks.grant`, the last 500 tokens are kept in the save), the save is persisted, then the purchase is consumed with `consumePurchase` (consumeAsync). Unconsumed packs found by `queryPurchasesAsync` on start/restore are finished the same way and can never grant twice. The five multiplier packs stay non-consumable and are only acknowledged.
+- **Game events** (`core/GameEvents.kt`, data-driven). Once-only awards are keyed and persisted in `SaveData.awardedEvents`; a toast "Stones +N" shows when Stones are earned.
+
+| Event | Stones | Once? |
+|---|---|---|
+| Best wave crosses each multiple of 100 (100, 200, …) | 10 each | once per multiple (`wave:N`) |
+| Spiral Boss kill | 1 × stage | every kill (repeatable) |
+| Stage milestone reached | 5 × stage | once per milestone (`stage:S:mI`) |
+| Stage cleared (all 11 milestones) | 100 × stage | once per stage (`stageclear:S`) |
+| Achievement: First run | 5 | once |
+| Achievement: First Spiral Boss | 10 | once |
+| Achievement: Reach wave 50 | 15 | once |
+| Achievement: Unlock Stage 2 | 25 | once |
+| Achievement: Unlock an Ultimate Weapon | 10 | once |
+| Achievement: Max every Workshop upgrade | 250 | once |
+
+Stones, unlocked UWs, UW levels and awarded events survive Settings → Reset progress (Stones can be bought with real money).
+
+### Ultimate Weapons
+All tuning lives in **`core/Ultimates.kt`**. The Ultimates tab opens at best wave 20.
+
+**Unlock cost by slot order** (whichever UW you unlock first costs 5, the second 50, …): 5, 50, 150, 300, 600, 1,000, 1,700, 2,900, 3,000 = **9,705 Stones** for all nine. A UW must be unlocked before any of its stats can be upgraded. Each stat costs `round(base × growth^level)` Stones per level and stops at its cap. Damage values are multiples of the tower's current damage, and the Enhancement multiplier applies to UW damage because it scales tower damage.
+
+| Ultimate | What it does | Stat 1 (L0 → cap; per-level cost; total) | Stat 2 | Stat 3 | Plus |
+|---|---|---|---|---|---|
+| **Golden Tower** | Temporary Bounty and cash multiplier | Multiplier: x2 → x15 (30 lv; 10 → 740 Stones/lv, 5304 total) | Duration: 10.0s → 45.0s (35 lv; 8 → 1244 Stones/lv, 8964 total) | Cooldown: 300.0s → 100.0s (20 lv; 12 → 383 Stones/lv, 2239 total) | Golden Tower+: Every kill during the effect also pays +100% of its base Bounty |
+| **Black Hole** | Pulls enemies into a point and crushes them (x5 tower damage per second) | Size: 0.12 → 0.35 (23 lv; 10 → 262 Stones/lv, 1837 total) | Duration: 6.0s → 20.0s (14 lv; 10 → 107 Stones/lv, 592 total) | Cooldown: 200.0s → 50.0s (30 lv; 12 → 888 Stones/lv, 6365 total) | Black Hole+: Crushing damage x5 and bosses are pulled in too |
+| **Death Wave** | A wave sweeps up the lane; each kill stores 25% of the victim's max HP into the wave | Damage: x3 → x12.0K (40 lv; 10 → 1657 Stones/lv, 13423 total) | Quantity: 1 → 5 (4 lv; 60 → 480 Stones/lv, 900 total) | Cooldown: 300.0s → 120.0s (18 lv; 12 → 353 Stones/lv, 1902 total) | Death Wave+: Stored damage per kill x3 |
+| **Lighthouse** | Rotating beams of light: tower hits on lit enemies are multiplied (continuous, per hit) | Damage: x1.5 → x100 (30 lv; 10 → 949 Stones/lv, 6473 total) | Angle: 30° → 360° (33 lv; 8 → 924 Stones/lv, 6648 total) | Quantity: 1 → 4 (3 lv; 100 → 625 Stones/lv, 975 total) | Lighthouse+: Beams rotate twice as fast and each beam's multiplier is +25% |
+| **Chrono Field** | Slow field around the tower (radius 0.6) | Duration: 5.0s → 20.0s (15 lv; 8 → 103 Stones/lv, 578 total) | Slow: 20% → 70% (25 lv; 10 → 352 Stones/lv, 2493 total) | Cooldown: 180.0s → 60.0s (24 lv; 10 → 304 Stones/lv, 2141 total) | Chrono Field+: Enemies inside the field take +50% damage |
+| **Chain Lightning** | Tower hits have a chance to arc lightning through nearby enemies | Damage: x4 → x6.00K (40 lv; 10 → 1657 Stones/lv, 13423 total) | Quantity: 2 → 8 (6 lv; 40 → 419 Stones/lv, 1051 total) | Chance: 5% → 30% (25 lv; 12 → 423 Stones/lv, 2992 total) | Chain Lightning+: +10% chance and chain damage x2 |
+| **Smart Missiles** | Volley of homing missiles | Damage: x8 → x8.00K (40 lv; 10 → 1657 Stones/lv, 13423 total) | Quantity: 2 → 12 (10 lv; 20 → 298 Stones/lv, 1091 total) | Cooldown: 30.0s → 8.0s (22 lv; 10 → 226 Stones/lv, 1575 total) | Smart Missiles+: Missiles explode, splashing full damage in a small radius |
+| **Inner Land Mines** | Ring of AoE mines close around the tower | Damage: x8 → x8.00K (40 lv; 10 → 1657 Stones/lv, 13423 total) | Quantity: 3 → 9 (6 lv; 30 → 228 Stones/lv, 624 total) | Cooldown: 40.0s → 10.0s (30 lv; 10 → 740 Stones/lv, 5304 total) | Inner Land Mines+: Each mine re-arms once after exploding |
+| **Poison Swamp** | Damage-over-time zone on the front line (ticks every 0.5 s, radius 0.18) | Damage: x8 → x8.00K (40 lv; 10 → 1657 Stones/lv, 13423 total) | Duration: 5.0s → 20.0s (15 lv; 10 → 128 Stones/lv, 720 total) | Cooldown: 120.0s → 40.0s (20 lv; 10 → 319 Stones/lv, 1866 total) | Poison Swamp+: Enemies in the swamp are also slowed by 30% |
+
+Damage stats of Death Wave, Chain Lightning, Smart Missiles, Inner Land Mines and Poison Swamp grow geometrically (each level ×constant), so they span 3x → 12,000x, 4x → 6,000x and 8x → 8,000x (Poison Swamp per 0.5 s tick). Seven UWs fire on their Cooldown stat (shown as pips above the in-run bar); Chain Lightning has no cooldown and triggers on tower hits (Chance stat), and Lighthouse is always on.
+
+**Lighthouse** (named in one constant, `UltimateNames.LIGHTHOUSE`). 1 → 4 beams rotate around the tower; each covers an Angle of 30° → 360° (360° = the whole map). Every 0.5 s each lit enemy takes one hit of tower damage × the beam multiplier (Damage 1.5x → ~100x per beam).
+- **Stacking rule:** normally beams are independent and, where they overlap, their multipliers **add** (two 100x beams = 200x, four = 400x).
+- When **all four beams exist AND the angle is maxed at 360°**, every beam covers the whole map and the four multipliers stack **multiplicatively**: 100^4 = **1e8** (1.56e8 with Lighthouse+). The result is clamped to a finite range (never NaN or infinite).
+- **Lighthouse's ~100x is a per-hit, continuous beam multiplier.** It is not comparable to Death Wave's 12,000x, which is a one-off damage pool per wave (plus the HP it stores from kills).
+
+**Ultimate Weapon Plus.** After **all nine** UWs are unlocked, each one gets a Plus ability (listed in the Plus column above), purchasable in **any order**. The price depends only on how many Plus abilities you already own:
+
+| Plus # (any UW) | Stones |
+|---|---|
+| 1 | 500 |
+| 2 | 750 |
+| 3 | 1,000 |
+| 4 | 1,500 |
+| 5 | 2,000 |
+| 6 | 2,500 |
+| 7 | 3,000 |
+| 8 | 4,000 |
+| 9 | 5,000 |
+
+All nine cost 22,250 Stones.
+
+**Save migration (v5 → v6).** The old Diamond UWs (Ember Nova, Frost Lattice, Chain Arc, Gravity Well) are removed. Every Diamond spent on them is refunded: unlock 20, then 8 + 6k for each level k → k+1 (e.g. level 3 = 20 + 14 + 20 = 54 Diamonds).
+
 ## Stages
 
 All stage tuning lives in **`app/src/main/java/com/toasteralley/emberwatch/core/StageDefinitions.kt`**. These are the formulas behind the table:
@@ -375,6 +445,11 @@ Before each cap bump, re-check the cost curve (`Enhancement.cost`) against the B
 - research timers on a fake clock, plus gates, slots and bypass
 - Light Speed conversion into fire rate and instant hits
 - the debug gate: closed when `!DEBUG`, and the secret-gesture timing
+- Ultimates: nine UWs with three stats, unlock costs 5 … 3000 summing to 9,705 and priced by slot order, no upgrade before unlock, stat costs escalating and capped, damage ranges (Death Wave 3 → 12,000x, Chain Lightning 4 → 6,000x, Missiles / Mines / Swamp 8 → 8,000x, Lighthouse 1.5 → 100x, angle 30 → 360°, 1 → 4 beams), Plus locked until all nine then any order with escalating prices
+- Lighthouse stacking: additive when not maxed (4 × 100 = 400), multiplicative with four beams at 360° (1e8), in the pure function and in the engine, with no overflow / NaN
+- every UW firing at cap in the engine without NaN, and the debug trigger
+- Stones: IAP ids, consumable grant once per purchase token, event awards once (best-wave milestones, stage milestones, stage clear, achievements) and boss kills repeatable
+- save migration v5 → v6 refunding the Diamonds spent on the removed UWs (and not refunding twice)
 - simulation smoke tests: a fresh run falls, upgraded runs go further, and god mode runs endless waves from wave 990
 
 ## License

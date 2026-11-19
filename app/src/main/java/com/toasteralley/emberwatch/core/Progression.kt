@@ -65,26 +65,8 @@ enum class DiamondPerk(val label: String, val description: String, val maxLevel:
 }
 
 // =====================================================================  Ultimate weapons
-enum class UltimateWeapon(val label: String, val description: String, val maxLevel: Int, val baseCooldown: Float, val minCooldown: Float) {
-    EMBER_NOVA("Ember Nova", "Burst of embers damaging every mob near the wall", 30, 60f, 20f),
-    FROST_LATTICE("Frost Lattice", "Slows every mob on the field", 30, 70f, 25f),
-    CHAIN_ARC("Chain Arc", "Lightning that chains through several mobs", 30, 25f, 8f),
-    GRAVITY_WELL("Gravity Well", "Drags mobs back toward the top and crushes them", 30, 90f, 30f);
-
-    /** Diamonds: unlock (level 0 -> 1) costs 20, then upgrades. */
-    fun cost(level: Int): Long = if (level == 0) 20 else (8 + 6 * level).toLong()
-    fun cooldown(level: Int): Float = (baseCooldown * 0.96f.pow(level - 1)).coerceAtLeast(minCooldown)
-    /** Damage as a multiple of tower attack. */
-    fun damageFactor(level: Int): Double = when (this) {
-        EMBER_NOVA -> 5.0 + 3.0 * level
-        FROST_LATTICE -> 0.0
-        CHAIN_ARC -> 3.0 + 2.0 * level
-        GRAVITY_WELL -> 2.0 + 1.5 * level
-    }
-    fun slow(level: Int) = (0.3f + 0.02f * level).coerceAtMost(0.7f)
-    fun duration(level: Int) = 5f + 0.5f * level
-    fun chainTargets(level: Int) = 3 + level
-}
+/* Ultimate Weapons moved to core/Ultimates.kt (Stones). The four Diamond UWs were removed in 1.3.0;
+ * SaveMigrations v6 refunds the Diamonds spent on them. */
 
 // =====================================================================  Gates
 object Gates {

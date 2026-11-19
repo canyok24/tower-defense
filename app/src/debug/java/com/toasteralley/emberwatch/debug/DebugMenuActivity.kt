@@ -8,7 +8,9 @@ import com.toasteralley.emberwatch.core.EnemyPool
 import com.toasteralley.emberwatch.core.Enhancement
 import com.toasteralley.emberwatch.core.StageDefinitions
 import com.toasteralley.emberwatch.core.Stages
-import com.toasteralley.emberwatch.core.UltimateWeapon
+import com.toasteralley.emberwatch.core.Ultimate
+import com.toasteralley.emberwatch.core.UltimateNames
+import com.toasteralley.emberwatch.core.Ultimates
 import com.toasteralley.emberwatch.core.Upgrade
 import com.toasteralley.emberwatch.core.WorkshopTab
 import com.toasteralley.emberwatch.ui.ListScreenActivity
@@ -60,9 +62,34 @@ class DebugMenuActivity : ListScreenActivity() {
         addRow("Unlock Light Speed Shots only", "Level 1 of the flagship research", "Unlock") {
             save.research[ResearchProject.LIGHT_SPEED_SHOTS.name] = 1
         }
-        addRow("Unlock all ultimate weapons", "Level 1 each (or keeps higher)", "Unlock") {
-            UltimateWeapon.entries.forEach { save.ultimates[it.name] = maxOf(1, save.level(it)) }
+        section(UltimateNames.TAB.uppercase() + " (STONES)")
+        addRow("Stones", "${save.stones}", "Set") { DebugTools.askNumber(this, "Stones") { save.stones = it.toLong().coerceAtLeast(0); app.persist(); build() } }
+        for (u in Ultimate.entries) {
+            val on = Ultimates.isUnlocked(save, u)
+            addRow("${u.label}: ${if (on) "unlocked" else "locked"}", "Toggle without spending Stones (slot #${save.uwUnlockOrder.indexOf(u.name) + 1})",
+                if (on) "Lock" else "Unlock") { if (on) save.uwUnlockOrder.remove(u.name) else save.uwUnlockOrder += u.name }
         }
+        addRow("Unlock all Ultimates", "All nine, free", "Unlock") { Ultimate.entries.forEach { if (it.name !in save.uwUnlockOrder) save.uwUnlockOrder += it.name } }
+        addRow("Set an Ultimate stat level", "Pick a UW stat and set its level", "Pick") {
+            val opts = Ultimate.entries.flatMap { u -> (0 until 3).map { u to it } }
+            androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Ultimate stat")
+                .setItems(opts.map { (u, i) -> "${u.label} · ${u.stat(i).label} (Lv ${Ultimates.level(save, u, i)}/${u.stat(i).maxLevel})" }.toTypedArray()) { _, k ->
+                    val (u, i) = opts[k]
+                    DebugTools.askNumber(this, "${u.label} ${u.stat(i).label} (0-${u.stat(i).maxLevel})") {
+                        save.uwStats["${u.name}.$i"] = it.toInt().coerceIn(0, u.stat(i).maxLevel); app.persist(); build()
+                    }
+                }.show()
+        }
+        addRow("Max all Ultimate stats", "Every stat of every UW to its cap", "Max") {
+            Ultimate.entries.forEach { u -> for (i in 0 until 3) save.uwStats["${u.name}.$i"] = u.stat(i).maxLevel }
+        }
+        addRow("Unlock all Ultimate Weapon Plus", "All nine Plus abilities, free (also unlocks all nine UWs)", "Unlock") {
+            Ultimate.entries.forEach { if (it.name !in save.uwUnlockOrder) save.uwUnlockOrder += it.name; save.uwPlus += it.name }
+        }
+        addRow("Reset Ultimates", "Locks all UWs, clears stats and Plus (Stones unchanged)", "Reset") {
+            save.uwUnlockOrder.clear(); save.uwStats.clear(); save.uwPlus.clear()
+        }
+        note("Trigger any Ultimate now: in a run, open the in-run override (hold pause 2 s, tap WAVE 5x) → Trigger an Ultimate now.")
         addRow("Set any workshop level", "Pick an ASSAULT / SHIELD / LEDGER upgrade and set its permanent level", "Pick") {
             val ups = Upgrade.entries
             androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Workshop upgrade")

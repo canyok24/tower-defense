@@ -15,7 +15,9 @@ import com.toasteralley.emberwatch.core.ResearchBay
 import com.toasteralley.emberwatch.core.ResearchProject
 import com.toasteralley.emberwatch.core.SaveData
 import com.toasteralley.emberwatch.core.TowerStats
-import com.toasteralley.emberwatch.core.UltimateWeapon
+import com.toasteralley.emberwatch.core.Ultimate
+import com.toasteralley.emberwatch.core.UltimateNames
+import com.toasteralley.emberwatch.core.Ultimates
 import com.toasteralley.emberwatch.core.Upgrade
 import com.toasteralley.emberwatch.core.Workshop
 import com.toasteralley.emberwatch.core.WorkshopTab
@@ -24,26 +26,34 @@ import kotlinx.coroutines.launch
 private fun c(v: Double) = NumberFormat.compact(v)
 
 /**
- * 1. Workshop: three tabs (ASSAULT / SHIELD / LEDGER). Bounty buy permanent levels
- * here; the in-run panel sells temporary levels of the same upgrades for Cash.
+ * 1. Workshop: four tabs, ASSAULT / SHIELD / LEDGER (Bounty buys permanent levels here; the in-run
+ * panel sells temporary levels of the same upgrades for Cash) and ULTIMATES (Stones).
  */
-class WorkshopActivity : ListScreenActivity() {
+open class WorkshopActivity : ListScreenActivity() {
     override val screenTitle = "Workshop"
-    private var tab = WorkshopTab.ASSAULT
+    private var tab: WorkshopTab? = WorkshopTab.ASSAULT     // null = ULTIMATES tab
+    protected open val startOnUltimates = false
+
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        if (startOnUltimates) tab = null
+        super.onCreate(savedInstanceState)
+    }
 
     override fun buildRows() {
         list.addView(android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.HORIZONTAL
-            for (t in WorkshopTab.entries) addView(emberButton(t.label, t != tab) { tab = t; build() },
-                android.widget.LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(6) })
+            val lp = { android.widget.LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(4) } }
+            for (t in WorkshopTab.entries) addView(emberButton(t.label, t != tab) { tab = t; build() }.apply { textSize = 12f }, lp())
+            addView(emberButton(UltimateNames.TAB.uppercase(), tab != null) { tab = null; build() }.apply { textSize = 12f }, lp())
         })
+        val t = tab ?: return ultimateRows()
         val s = TowerStats.resolve(save)
-        note(when (tab) {
+        note(when (t) {
             WorkshopTab.ASSAULT -> "DMG ${c(s.damage)} · ${"%.2f".format(s.fireRate)}/s · Crit ${"%.1f".format(s.critChance * 100)}% x${"%.2f".format(s.critFactor)} · Range ${"%.2f".format(s.range)}"
             WorkshopTab.SHIELD -> "Hull ${c(s.maxHealth)} · Repair ${c(s.effectiveRegen())}/s · Barrier ${"%.1f".format(s.defense * 100)}% · Plating -${c(s.defenseAbs)} · Fortification ${c(s.wallMaxHp)}"
             WorkshopTab.LEDGER -> "Bounty x${"%.2f".format(s.bountyGain)} · Cash x${"%.2f".format(s.tribute)} · Interest ${"%.1f".format(s.interest * 100)}%"
         } + "\nPermanent levels (Bounty). In runs, the same upgrades can be raised temporarily with Cash.")
-        for (u in Upgrade.ofTab(tab)) {
+        for (u in Upgrade.ofTab(t)) {
             val lvl = save.level(u)
             if (!Workshop.gateOpen(u, save, app.bypassGates)) { addRow(u.label, "Locked: reach wave ${u.gateWave}", null); continue }
             val maxed = lvl >= u.maxLevel
@@ -54,28 +64,41 @@ class WorkshopActivity : ListScreenActivity() {
             }
         }
     }
-}
 
-/** 2. Ultimate Weapons: unlocked/upgraded with Diamonds, auto-fire on cooldown in runs. */
-class UltimatesActivity : ListScreenActivity() {
-    override val screenTitle = "Ultimate Weapons"
-    override fun buildRows() {
+    /** ULTIMATES tab: nine Stone Ultimate Weapons, three stats each, then Ultimate Weapon Plus. */
+    private fun ultimateRows() {
         if (!Gates.open(Gates.ULTIMATES_WAVE, save, app.bypassGates)) { note("Locked: reach wave ${Gates.ULTIMATES_WAVE}."); return }
-        note("Unlocked weapons trigger automatically during runs whenever their cooldown is ready.")
-        for (u in UltimateWeapon.entries) {
-            val lvl = save.level(u); val cost = u.cost(lvl); val maxed = lvl >= u.maxLevel
-            val detail = when (u) {
-                UltimateWeapon.FROST_LATTICE -> "slow ${(u.slow(lvl.coerceAtLeast(1)) * 100).toInt()}% for ${u.duration(lvl.coerceAtLeast(1))}s"
-                UltimateWeapon.CHAIN_ARC -> "${u.chainTargets(lvl.coerceAtLeast(1))} targets, x${u.damageFactor(lvl.coerceAtLeast(1))} dmg"
-                else -> "x${u.damageFactor(lvl.coerceAtLeast(1))} attack damage"
+        val next = Ultimates.nextUnlockCost(save)
+        note("Stones ${save.stones} · unlocked ${Ultimates.unlockedCount(save)}/9" +
+            (next?.let { " · next unlock costs $it Stones (price set by unlock order)" } ?: " · Ultimate Weapon Plus available") +
+            "\nUnlocked weapons fire automatically during runs. Earn Stones from events or buy them in the Store.")
+        for (u in Ultimate.entries) {
+            section(u.label.uppercase())
+            if (!Ultimates.isUnlocked(save, u)) {
+                val c = next ?: 0
+                addRow("${u.label} (locked)", u.description, "Unlock $c", next != null && save.stones >= c) { Ultimates.unlock(save, u) }
+                continue
             }
-            addRow(if (lvl == 0) "${u.label} (locked)" else "${u.label}  Lv $lvl",
-                "${u.description}\n$detail · cooldown ${"%.0f".format(u.cooldown(lvl.coerceAtLeast(1)))}s",
-                if (maxed) "MAX" else if (lvl == 0) "Unlock ◆$cost" else "◆$cost", !maxed && save.diamonds >= cost) {
-                if (save.diamonds >= cost) { save.diamonds -= cost; save.ultimates[u.name] = lvl + 1 }
+            for (i in 0 until 3) {
+                val st = u.stat(i); val l = Ultimates.level(save, u, i); val maxed = l >= st.maxLevel
+                addRow("${st.label}  Lv $l/${st.maxLevel}", "${st.format(l)} → ${if (maxed) "max" else st.format(l + 1)}",
+                    if (maxed) "MAX" else "${st.cost(l)} Stones", Ultimates.canUpgrade(save, u, i)) { Ultimates.upgrade(save, u, i) }
             }
         }
+        section("ULTIMATE WEAPON PLUS")
+        if (!Ultimates.plusAvailable(save)) { note("Unlock all nine Ultimate Weapons to unlock Plus abilities."); return }
+        val pc = Ultimates.nextPlusCost(save)
+        for (u in Ultimate.entries) {
+            val has = Ultimates.hasPlus(save, u)
+            addRow(u.plusLabel, u.plusDescription, if (has) "OWNED" else "${pc ?: 0} Stones",
+                !has && pc != null && save.stones >= pc) { Ultimates.buyPlus(save, u) }
+        }
     }
+}
+
+/** 2. Main-menu "Ultimates": the Workshop's ULTIMATES tab (replaces the old Diamond Ultimate Weapons screen). */
+class UltimatesActivity : WorkshopActivity() {
+    override val startOnUltimates = true
 }
 
 /** 3. Diamond Perks. */
@@ -194,7 +217,7 @@ class StoreActivity : ListScreenActivity() {
         super.onCreate(savedInstanceState)
         lifecycleScope.launch { app.billing.owned.collect { build() } }
         lifecycleScope.launch { app.billing.products.collect { build() } }
-        lifecycleScope.launch { app.billing.messages.collect { toast(it) } }
+        lifecycleScope.launch { app.billing.messages.collect { toast(it); build() } }
         AdManager.preloadRewarded(this)
     }
     override fun buildRows() {
@@ -208,6 +231,13 @@ class StoreActivity : ListScreenActivity() {
             addRow(p.title, "x${p.bountyMultiplier} Bounty forever" + (if (p.removesAds) " · removes banner & interstitial ads" else "") +
                 (if (price == null && !has) "\nUnavailable until published on Google Play" else ""),
                 if (has) "Owned" else price ?: p.listPrice, !has) { app.billing.launchPurchase(this, p.id) }
+        }
+        section("STONES")
+        note("Stones unlock and upgrade Ultimate Weapons. Consumable: buy as often as you like. You have ${save.stones}.")
+        for (p in com.toasteralley.emberwatch.core.StonePacks.ALL) {
+            val price = app.billing.priceOf(p.id)
+            addRow(p.title, "${p.stones} Stones" + (if (price == null) "\nUnavailable until published on Google Play" else ""),
+                price ?: p.listPrice, true) { app.billing.launchPurchase(this, p.id) }
         }
         section("BOOST")
         val left = (save.boostUntilMs - now).coerceAtLeast(0)
@@ -241,7 +271,9 @@ class SettingsActivity : ListScreenActivity() {
         save.bounty = fresh.bounty; save.diamonds = 0; save.cores = 0; save.bestWave = 0; save.totalRuns = 0
         save.selectedStage = 1; save.legacyUnlockedStage = 1
         save.stageBestWave.clear(); save.stageMilestonesClaimed.clear()
-        save.workshop.clear(); save.perks.clear(); save.ultimates.clear(); save.research.clear()
+        save.workshop.clear(); save.perks.clear(); save.research.clear()
+        save.masteries.clear(); save.activeMastery.clear()
+        // Stones, Ultimates and Stone event awards are kept: Stones can be bought with real money.
         save.activeResearch.clear(); save.enhancement = 0
     }
 }

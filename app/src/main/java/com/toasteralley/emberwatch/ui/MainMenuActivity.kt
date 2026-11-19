@@ -137,7 +137,7 @@ class MainMenuActivity : AppCompatActivity() {
                 startActivity(Intent(this, MasteryActivity::class.java))   // locked screen shows progress
             }, LinearLayout.LayoutParams(dp(280), ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })
         }
-        menu("Ultimate Weapons", Gates.ULTIMATES_WAVE, UltimatesActivity::class.java)
+        menu(com.toasteralley.emberwatch.core.UltimateNames.TAB, Gates.ULTIMATES_WAVE, UltimatesActivity::class.java)
         menu("Diamond Perks", Gates.PERKS_WAVE, PerksActivity::class.java)
         menu("Enhancement", Gates.ENHANCEMENT_WAVE, EnhancementActivity::class.java)
         menu("Store", 0, StoreActivity::class.java)

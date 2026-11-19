@@ -16,7 +16,10 @@ import com.toasteralley.emberwatch.core.DebugGate
 import com.toasteralley.emberwatch.core.GameEngine
 import com.toasteralley.emberwatch.core.ResearchProject
 import com.toasteralley.emberwatch.core.RunRewards
-import com.toasteralley.emberwatch.core.UltimateWeapon
+import com.toasteralley.emberwatch.core.GameAchievement
+import com.toasteralley.emberwatch.core.GameEvent
+import com.toasteralley.emberwatch.core.GameEvents
+import com.toasteralley.emberwatch.core.Ultimate
 import com.toasteralley.emberwatch.debug.DebugTools
 import com.toasteralley.emberwatch.debug.InGameDebug
 import com.toasteralley.emberwatch.game.GameView
@@ -44,7 +47,7 @@ class GameActivity : AppCompatActivity(), GameView.Listener {
         }
         engine = GameEngine(
             save = save,
-            ultimates = UltimateWeapon.entries.associateWith { save.level(it) },
+            ultimates = com.toasteralley.emberwatch.core.UltimateLoadout.from(save),
             bountyMultiplier = app.bountyMultiplier(),
             coreMultiplier = ResearchProject.CORE_YIELD.effect(save.level(ResearchProject.CORE_YIELD)),
             stage = save.selectedStage,
@@ -66,7 +69,17 @@ class GameActivity : AppCompatActivity(), GameView.Listener {
 
     private fun bank() {
         synchronized(engine) { save.bounty += engine.takeUnbankedBounty() }
+        drainStoneEvents()
         app.persist()
+    }
+
+    /** Applies Stone events raised by the engine (boss kills) and shows a small "Stones +N" toast. */
+    private fun drainStoneEvents() {
+        val events = synchronized(engine) { engine.stoneEvents.toList().also { engine.stoneEvents.clear() } }
+        if (events.isEmpty()) return
+        var n = GameEvents.handleAll(save, events)
+        if (events.any { it is GameEvent.BossKill }) n += GameEvents.handle(save, GameEvent.Achievement(GameAchievement.FIRST_BOSS))
+        if (n > 0) { app.persist(); android.widget.Toast.makeText(this, "Stones +$n", android.widget.Toast.LENGTH_SHORT).show() }
     }
 
     private fun endRun() {
@@ -78,6 +91,8 @@ class GameActivity : AppCompatActivity(), GameView.Listener {
             save.cores += engine.runCores
             lastReward = RunRewards.applyRunEnd(save, engine.wave, engine.stage)
         }
+        drainStoneEvents()
+        lastReward?.stones?.takeIf { it > 0 }?.let { android.widget.Toast.makeText(this, "Stones +$it", android.widget.Toast.LENGTH_SHORT).show() }
         save.runsSinceInterstitial++
         app.persist()
     }
@@ -114,6 +129,8 @@ class GameActivity : AppCompatActivity(), GameView.Listener {
             override fun addCash(amount: Double) = synchronized(engine) { engine.debugAddCash(amount) }
             override fun heal() = synchronized(engine) { engine.debugHeal() }
             override fun resume() = synchronized(engine) { engine.paused = false }
+            override fun ultimateNames() = Ultimate.entries.map { it.label }
+            override fun triggerUltimate(index: Int) = synchronized(engine) { engine.debugTrigger(Ultimate.entries[index], forceUnlock = true) }
         })
     }
 }

@@ -19,7 +19,7 @@ import com.toasteralley.emberwatch.core.Palette
 import com.toasteralley.emberwatch.core.Upgrade
 import com.toasteralley.emberwatch.core.WorkshopTab
 import com.toasteralley.emberwatch.core.SecretGesture
-import com.toasteralley.emberwatch.core.UltimateWeapon
+import com.toasteralley.emberwatch.core.Ultimate
 import kotlin.math.max
 import kotlin.math.sin
 
@@ -178,7 +178,7 @@ class GameView(context: Context, val engine: GameEngine) : SurfaceView(context),
         val e = engine
         c.save(); c.clipRect(0f, fieldTop, w, fieldBottom)
         drawGrid(c)
-        if (e.frostActive) { fill.color = Palette.STEEL_LIGHT; fill.alpha = 22; c.drawRect(0f, fieldTop, w, fieldBottom, fill) }
+        drawUltimatesUnder(c)
         // tower contact line
         stroke.color = Palette.STEEL; stroke.alpha = 120
         c.drawLine(0f, sy(e.towerLineY), w, sy(e.towerLineY), stroke)
@@ -228,8 +228,14 @@ class GameView(context: Context, val engine: GameEngine) : SurfaceView(context),
         }
         fill.color = Palette.CORAL_DIM
         for (s in e.enemyShots) c.drawCircle(sx(s.x), sy(s.y), 4f * density, fill)
+        drawUltimatesOver(c)
         drawFx(c)
         drawTower(c)
+        if (e.goldenTimer > 0f) {   // Golden Tower: gold ring around the tower
+            stroke.color = Palette.GOLD; stroke.alpha = 220; stroke.strokeWidth = 3f * density
+            c.drawCircle(sx(e.towerX), sy(e.towerY), GameEngine.TOWER_RADIUS * scale * 1.5f, stroke)
+            stroke.strokeWidth = 2f * density; stroke.alpha = 255
+        }
         // orbs
         fill.color = Palette.STEEL_LIGHT; fill.alpha = 255
         for (i in 0 until e.stats.orbs) {
@@ -274,8 +280,7 @@ class GameView(context: Context, val engine: GameEngine) : SurfaceView(context),
                 FxKind.CHAIN -> { stroke.color = Palette.STEEL_LIGHT; stroke.alpha = (255 * a).toInt(); c.drawLine(sx(f.x), sy(f.y), sx(f.x2), sy(f.y2), stroke) }
                 FxKind.NOVA -> { stroke.color = Palette.CORAL; stroke.alpha = (255 * a).toInt(); c.drawCircle(sx(f.x), sy(f.y), f.x2 * scale * (1 - a * 0.7f), stroke) }
                 FxKind.POP -> { stroke.color = f.color; stroke.alpha = (200 * a).toInt(); c.drawCircle(sx(f.x), sy(f.y), f.x2 * scale * (2 - a), stroke) }
-                FxKind.FROST -> { fill.color = Palette.STEEL_LIGHT; fill.alpha = (70 * a).toInt(); c.drawRect(0f, fieldTop, w, fieldBottom, fill) }
-                FxKind.GRAVITY -> { fill.color = Palette.STEEL; fill.alpha = (80 * a).toInt(); c.drawRect(0f, fieldTop, w, fieldBottom, fill) }
+                FxKind.GOLDEN -> { stroke.color = Palette.GOLD; stroke.alpha = (255 * a).toInt(); c.drawCircle(sx(f.x), sy(f.y), GameEngine.TOWER_RADIUS * scale * (3 - 1.5f * a), stroke) }
                 FxKind.SHOCK -> { stroke.color = Palette.STEEL_LIGHT; stroke.alpha = (200 * a).toInt(); c.drawCircle(sx(f.x), sy(f.y), f.x2 * scale * (1.1f - a * 0.6f), stroke) }
                 FxKind.FREE, FxKind.LAST_STAND -> {
                     text.color = if (f.kind == FxKind.FREE) Palette.STEEL_LIGHT else Palette.CORAL; text.alpha = (255 * a).toInt()
@@ -336,25 +341,76 @@ class GameView(context: Context, val engine: GameEngine) : SurfaceView(context),
                 r.centerX(), r.top + r.height() * 0.86f, text)
             text.textAlign = Paint.Align.LEFT
         }
-        // ultimate cooldown pips just above the bar
-        var x = 12 * density
-        for ((uw, lvl) in e.ultimates) {
-            if (lvl <= 0) continue
-            val cd = (e.uwCooldown[uw] ?: 0f).coerceAtLeast(0f) / uw.cooldown(lvl)
-            val cy = bar.top - 16 * density
-            stroke.color = Palette.STEEL; c.drawCircle(x + 8 * density, cy, 8 * density, stroke)
-            fill.color = Palette.CORAL; fill.alpha = if (cd <= 0f) 255 else 90
-            tmp.set(x, cy - 8 * density, x + 16 * density, cy + 8 * density)
+        // ultimate cooldown pips just above the bar (cooldown-based UWs; Lighthouse / Chain Lightning are always on)
+        var x = 8 * density
+        val cy = bar.top - 14 * density
+        for (uw in Ultimate.entries) {
+            if (!e.has(uw)) continue
+            val full = e.cooldownOf(uw)
+            val cd = if (full == null || full <= 0f) 0f else ((e.uwCooldown[uw] ?: 0f).coerceAtLeast(0f) / full).coerceIn(0f, 1f)
+            stroke.color = Palette.STEEL; c.drawCircle(x + 7 * density, cy, 7 * density, stroke)
+            fill.color = if (uw == Ultimate.GOLDEN_TOWER) Palette.GOLD else Palette.CORAL; fill.alpha = if (cd <= 0f) 255 else 90
+            tmp.set(x, cy - 7 * density, x + 14 * density, cy + 7 * density)
             c.drawArc(tmp, -90f, 360f * (1 - cd), true, fill); fill.alpha = 255
-            text.textSize = 10 * density; text.color = Palette.TEXT_DIM
-            c.drawText(uwShort(uw), x + 20 * density, cy + 4 * density, text)
-            x += 70 * density
+            text.textSize = 9 * density; text.color = Palette.TEXT_DIM
+            c.drawText(uwShort(uw), x + 16 * density, cy + 3 * density, text)
+            x += 46 * density
         }
     }
 
-    private fun uwShort(u: UltimateWeapon) = when (u) {
-        UltimateWeapon.EMBER_NOVA -> "Nova"; UltimateWeapon.FROST_LATTICE -> "Frost"
-        UltimateWeapon.CHAIN_ARC -> "Arc"; UltimateWeapon.GRAVITY_WELL -> "Well"
+    private fun uwShort(u: Ultimate) = when (u) {
+        Ultimate.GOLDEN_TOWER -> "Gold"; Ultimate.BLACK_HOLE -> "Hole"; Ultimate.DEATH_WAVE -> "Wave"
+        Ultimate.LIGHTHOUSE -> "Light"; Ultimate.CHRONO_FIELD -> "Chrono"; Ultimate.CHAIN_LIGHTNING -> "Chain"
+        Ultimate.SMART_MISSILES -> "Msl"; Ultimate.INNER_LAND_MINES -> "Mines"; Ultimate.POISON_SWAMP -> "Swamp"
+    }
+
+    /** Field-level UW effects drawn under the mobs: Chrono Field, Poison Swamp, Black Hole, Lighthouse beams. */
+    private fun drawUltimatesUnder(c: Canvas) {
+        val e = engine
+        if (e.chronoTimer > 0f) {
+            fill.color = Palette.STEEL_LIGHT; fill.alpha = 26
+            c.drawCircle(sx(e.towerX), sy(e.towerY), GameEngine.CHRONO_RADIUS * scale, fill)
+            stroke.color = Palette.STEEL_LIGHT; stroke.alpha = 90
+            c.drawCircle(sx(e.towerX), sy(e.towerY), GameEngine.CHRONO_RADIUS * scale, stroke)
+        }
+        if (e.swampTimer > 0f) {
+            fill.color = Palette.SWAMP; fill.alpha = 60
+            c.drawCircle(sx(e.swampX), sy(e.swampY), GameEngine.SWAMP_RADIUS * scale, fill)
+        }
+        val n = e.lighthouseBeams
+        if (n > 0) {
+            fill.color = Palette.GOLD
+            val ang = e.lighthouseAngleDeg.toFloat()
+            val r = 3f * scale
+            tmp.set(sx(e.towerX) - r, sy(e.towerY) - r, sx(e.towerX) + r, sy(e.towerY) + r)
+            if (ang >= 360f) { fill.alpha = if (e.lighthouseFullCoverage) 40 else 14 * n; c.drawRect(0f, fieldTop, w, fieldBottom, fill) }
+            else for (i in 0 until n) {
+                fill.alpha = 34
+                // beam direction: 0 rad = up; Canvas angles: 0 deg = +x, clockwise
+                val dirDeg = Math.toDegrees(e.beamDirection(i).toDouble()).toFloat() - 90f
+                c.drawArc(tmp, dirDeg - ang / 2, ang, true, fill)
+            }
+            fill.alpha = 255
+        }
+        if (e.blackHoleTimer > 0f) {
+            val r = e.ultimates.v(Ultimate.BLACK_HOLE, 0).toFloat() * scale
+            fill.color = Palette.VOID; fill.alpha = 200; c.drawCircle(sx(e.blackHoleX), sy(e.blackHoleY), r * 0.25f, fill)
+            stroke.color = Palette.STEEL; stroke.alpha = 120; c.drawCircle(sx(e.blackHoleX), sy(e.blackHoleY), r, stroke)
+            fill.alpha = 255; stroke.alpha = 255
+        }
+    }
+
+    /** Projectile-like UW effects drawn over the mobs: Death Wave lines, Smart Missiles, Inner Land Mines. */
+    private fun drawUltimatesOver(c: Canvas) {
+        val e = engine
+        stroke.color = Palette.CORAL; stroke.alpha = 200; stroke.strokeWidth = 4f * density
+        for (dw in e.deathWaves) c.drawLine(0f, sy(dw.y), w, sy(dw.y), stroke)
+        stroke.strokeWidth = 2f * density
+        stroke.color = Palette.TEXT; stroke.alpha = 230
+        for (m in e.missiles) c.drawLine(sx(m.x), sy(m.y), sx(m.x - m.vx * 0.03f), sy(m.y - m.vy * 0.03f), stroke)
+        fill.color = Palette.GOLD; fill.alpha = 230
+        for (m in e.uwMines) { val r = GameEngine.UW_MINE_RADIUS * scale; c.drawRect(sx(m.x) - r, sy(m.y) - r, sx(m.x) + r, sy(m.y) + r, fill) }
+        fill.alpha = 255; stroke.alpha = 255
     }
 
     private fun button(c: Canvas, r: RectF, label: String, enabled: Boolean) {

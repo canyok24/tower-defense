@@ -14,4 +14,8 @@ interface InGameDebug {
     fun addCash(amount: Double)
     fun heal()
     fun resume()
+    /** Names of the nine Ultimate Weapons (Stones). */
+    fun ultimateNames(): List<String>
+    /** Fire Ultimate [index] now (unlocking it for this run if needed). Returns false if it had nothing to do. */
+    fun triggerUltimate(index: Int): Boolean
 }

@@ -25,7 +25,17 @@ class SaveData {
     var legacyUnlockedStage: Int = 1
     val workshop: MutableMap<String, Int> = mutableMapOf()
     val perks: MutableMap<String, Int> = mutableMapOf()
-    val ultimates: MutableMap<String, Int> = mutableMapOf()
+    /** Stones (premium + event currency) and the Ultimate Weapons they buy. */
+    var stones: Long = 0
+    /** UW names in the order they were unlocked (slot order sets the unlock price). */
+    val uwUnlockOrder: MutableList<String> = mutableListOf()
+    /** UW stat levels keyed "ULTIMATE.statIndex". */
+    val uwStats: MutableMap<String, Int> = mutableMapOf()
+    val uwPlus: MutableSet<String> = mutableSetOf()
+    /** Once-only Stone event keys already paid (GameEvents). */
+    val awardedEvents: MutableSet<String> = mutableSetOf()
+    /** Consumable Stone purchase tokens already granted (idempotency). */
+    val processedStoneTokens: MutableList<String> = mutableListOf()
     var enhancement: Int = 0
     val research: MutableMap<String, Int> = mutableMapOf()
     val activeResearch: MutableList<ActiveResearch> = mutableListOf()
@@ -45,7 +55,6 @@ class SaveData {
 
     fun level(u: Upgrade) = workshop[u.name] ?: 0
     fun level(p: DiamondPerk) = perks[p.name] ?: 0
-    fun level(u: UltimateWeapon) = ultimates[u.name] ?: 0
     fun level(r: ResearchProject) = research[r.name] ?: 0
     fun level(m: Mastery) = masteries[m.name] ?: 0
 
@@ -54,6 +63,6 @@ class SaveData {
          * v1: 10 difficulty tiers. v2: 24 stages with per-stage best wave + milestone rewards.
          * v3: Workshop split into ASSAULT / SHIELD / LEDGER (old six stats renamed).
          */
-        const val CURRENT_VERSION = 5  // v4: Shield renames; v5: coins -> Bounty, Ledger Bounty -> Bounty Gain
+        const val CURRENT_VERSION = 6  // v4: Shield renames; v5: coins -> Bounty; v6: Stone Ultimates (old Diamond UWs refunded)
     }
 }

@@ -10,6 +10,8 @@ import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.BillingClientStateListener
 import com.android.billingclient.api.BillingFlowParams
 import com.android.billingclient.api.BillingResult
+import com.android.billingclient.api.ConsumeParams
+import com.android.billingclient.api.consumePurchase
 import com.android.billingclient.api.PendingPurchasesParams
 import com.android.billingclient.api.ProductDetails
 import com.android.billingclient.api.Purchase
@@ -22,6 +24,7 @@ import com.android.billingclient.api.acknowledgePurchase
 import com.android.billingclient.api.queryPurchasesAsync
 import com.toasteralley.emberwatch.BuildConfig
 import com.toasteralley.emberwatch.core.Products
+import com.toasteralley.emberwatch.core.StonePacks
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -43,8 +46,11 @@ import kotlin.coroutines.resume
  * - queryProductDetailsAsync returns [QueryProductDetailsResult] (fetched + unfetched)
  * - owned items restored with queryPurchasesAsync; every purchase is acknowledged
  *
- * All five products are one-time NON-consumables (never consumed), so they are
- * restored on reinstall / new devices. Product ids must match Play Console exactly
+ * The five multiplier packs are one-time NON-consumables (never consumed), so they are
+ * restored on reinstall / new devices. The Stone packs (core.StonePacks) are CONSUMABLES:
+ * the Stones are granted first (idempotent by purchase token, see StonePacks.grant), the
+ * save is persisted, and only then is the purchase consumed with consumePurchase (consumeAsync),
+ * so a crash in between re-grants nothing and the next queryPurchases finishes the consume. Product ids must match Play Console exactly
  * (see core.Products). For production, verify purchase tokens server-side.
  */
 class BillingManager(context: Context, private val store: EntitlementStore) :
@@ -80,6 +86,12 @@ class BillingManager(context: Context, private val store: EntitlementStore) :
 
     private var reconnectDelayMs = INITIAL_RECONNECT_MS
 
+    /**
+     * Grants Stones for a consumable purchase token and persists; returns Stones granted
+     * (0 when the token was already processed). Set by the Application.
+     */
+    var stoneGrant: ((purchaseToken: String, productIds: List<String>) -> Long)? = null
+
     fun startConnection() {
         if (billingClient.isReady || _connection.value == ConnectionState.CONNECTING) return
         _connection.value = ConnectionState.CONNECTING
@@ -112,7 +124,7 @@ class BillingManager(context: Context, private val store: EntitlementStore) :
     suspend fun queryProductDetails() {
         if (!billingClient.isReady) return
         val params = QueryProductDetailsParams.newBuilder()
-            .setProductList(Products.IDS.map {
+            .setProductList((Products.IDS + StonePacks.IDS).map {
                 QueryProductDetailsParams.Product.newBuilder()
                     .setProductId(it).setProductType(BillingClient.ProductType.INAPP).build()
             }).build()
@@ -185,6 +197,12 @@ class BillingManager(context: Context, private val store: EntitlementStore) :
         for (p in purchases) when (p.purchaseState) {
             Purchase.PurchaseState.PURCHASED -> {
                 // TODO(production): verify p.originalJson / signature on your server.
+                if (p.products.any { it in StonePacks.IDS }) {
+                    val granted = stoneGrant?.invoke(p.purchaseToken, p.products) ?: continue   // not wired: retry later
+                    if (granted > 0) _messages.tryEmit("Stones +$granted")
+                    consume(p)
+                    continue
+                }
                 p.products.filter { it in Products.IDS }.forEach { next += it }
                 if (!p.isAcknowledged) acknowledge(p)
                 if (!fullSync) _messages.tryEmit("Thank you! Purchase complete.")
@@ -196,6 +214,11 @@ class BillingManager(context: Context, private val store: EntitlementStore) :
         purchased = next
         store.savePurchased(purchased)
         _owned.value = merge()
+    }
+
+    private suspend fun consume(p: Purchase) {
+        val r = billingClient.consumePurchase(ConsumeParams.newBuilder().setPurchaseToken(p.purchaseToken).build())
+        if (r.billingResult.responseCode != BillingClient.BillingResponseCode.OK) Log.w(TAG, "Consume failed: ${r.billingResult.debugMessage}")
     }
 
     private suspend fun acknowledge(p: Purchase) {

@@ -6,6 +6,8 @@ data class LegacyFields(
     val selectedTier: Int = 1,
     /** Pre-v5 saves stored the currency under "coins" (now "bounty"). */
     val coins: Double? = null,
+    /** Pre-v6 Diamond Ultimate Weapon levels (Ember Nova, Frost Lattice, Chain Arc, Gravity Well). */
+    val oldUltimates: Map<String, Int> = emptyMap(),
 )
 
 /** Pure save migrations (unit-tested; SaveStore only extracts the raw fields). */
@@ -47,6 +49,16 @@ object SaveMigrations {
 
     /** Everything that must hold for any loaded save, whatever its version. */
     fun normalize(save: SaveData): SaveData = clampStages(clampWorkshop(save))
+
+    val OLD_DIAMOND_UWS = setOf("EMBER_NOVA", "FROST_LATTICE", "CHAIN_ARC", "GRAVITY_WELL")
+
+    /** Diamonds spent to reach [level] on an old UW: unlock 20, then level k -> k+1 cost 8 + 6k. */
+    fun oldUwDiamondsSpent(level: Int): Long {
+        if (level <= 0) return 0
+        var total = 20L
+        for (k in 1 until level) total += 8 + 6L * k
+        return total
+    }
 
     fun clampWorkshop(save: SaveData): SaveData {
         for (key in save.workshop.keys.toList()) {
@@ -92,6 +104,12 @@ object SaveMigrations {
             save.workshop.remove("BOUNTY")?.let { save.workshop[Upgrade.BOUNTY_GAIN.name] = maxOf(save.workshop[Upgrade.BOUNTY_GAIN.name] ?: 0, it) }
             save.research.remove("COIN_BONUS")?.let { save.research[ResearchProject.BOUNTY_BONUS.name] = maxOf(save.research[ResearchProject.BOUNTY_BONUS.name] ?: 0, it) }
             v = 5
+        }
+        if (v < 6) {
+            // v5 -> v6: the four Diamond UWs are removed (replaced by the nine Stone Ultimates).
+            // Refund every Diamond spent on them.
+            save.diamonds += legacy.oldUltimates.filterKeys { it in OLD_DIAMOND_UWS }.values.sumOf { oldUwDiamondsSpent(it) }
+            v = 6
         }
         normalize(save)
         save.version = SaveData.CURRENT_VERSION

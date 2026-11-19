@@ -23,6 +23,7 @@ class EmberwatchApp : Application() {
         saveStore = SaveStore(this)
         save = saveStore.load()
         billing = BillingManager(this, EntitlementStore(this))
+        billing.stoneGrant = { token, ids -> com.toasteralley.emberwatch.core.StonePacks.grant(save, token, ids).also { if (it > 0) persist() } }
         billing.startConnection()
         AdManager.initialize(this)
     }
