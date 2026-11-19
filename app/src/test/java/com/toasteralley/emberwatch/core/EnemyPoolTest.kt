@@ -44,7 +44,7 @@ class EnemyPoolTest {
     }
 
     @Test fun engineUsesEnhancementPool() {
-        val e = GameEngine(TowerStats.resolve(SaveData()), emptyMap(), 1.0, startWave = 200, enhancementLevel = 0, seed = 1, godMode = true)
+        val e = GameEngine(SaveData(), emptyMap(), 1.0, startWave = 200, enhancementLevel = 0, seed = 1, godMode = true)
         repeat(60 * 15) { e.step() }
         assertTrue(e.mobs.isNotEmpty())
         assertTrue(e.mobs.filter { !it.isBoss }.all { it.look.shape.tier in commonMid })

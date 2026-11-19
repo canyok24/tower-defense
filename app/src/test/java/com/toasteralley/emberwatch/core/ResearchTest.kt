@@ -59,8 +59,8 @@ class ResearchTest {
 
     @Test fun lightSpeedHitsInstantly() {
         val s = SaveData().apply { research[ResearchProject.LIGHT_SPEED_SHOTS.name] = 1 }
-        val e = GameEngine(TowerStats.resolve(s), emptyMap(), 1.0, seed = 5)
-        val m = e.spawnMob(MobShape.ELLIPSE, 0.5f, 0.5f)
+        val e = GameEngine(s, emptyMap(), 1.0, seed = 5)
+        val m = e.spawnMob(MobShape.ELLIPSE, 0.5f, e.towerY - 0.6f)   // inside the 1.2 base range
         val hp = m.hp
         e.step()
         assertTrue(e.shots.isEmpty())

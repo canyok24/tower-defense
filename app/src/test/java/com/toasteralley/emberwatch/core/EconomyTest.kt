@@ -42,13 +42,16 @@ class EconomyTest {
     }
 
     @Test fun costCurvesAreExponentialAndIncreasing() {
-        for (w in WorkshopStat.entries) {
-            for (l in 0 until 100) assertTrue("${w.name} L$l", w.cost(l + 1) >= w.cost(l))
-            assertTrue(w.cost(50) / w.cost(40) > 3.0)
+        for (u in Upgrade.entries) {
+            for (l in 0 until u.maxLevel) {
+                assertTrue("${u.name} coin L$l", u.coinCost(l + 1) >= u.coinCost(l) && u.coinCost(l).isFinite())
+                assertTrue("${u.name} cash L$l", u.cashCost(l + 1) >= u.cashCost(l) && u.cashCost(l).isFinite())
+            }
+            assertTrue(u.name, u.coinCost(u.maxLevel).isFinite() && u.cashCost(u.maxLevel).isFinite())
+            assertTrue(u.name, u.coinCost(40) / u.coinCost(30) > 3.0)
         }
         for (p in DiamondPerk.entries) for (l in 0 until p.maxLevel) assertTrue(p.cost(l + 1) > p.cost(l))
         for (u in UltimateWeapon.entries) assertEquals(20L, u.cost(0))
-        for (r in RunUpgrade.entries) assertTrue(r.cost(10) > r.cost(0))
     }
 
     @Test fun compactFormat() {

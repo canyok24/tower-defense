@@ -4,12 +4,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SimulationTest {
+    private val OLD_SIX = listOf(Upgrade.DAMAGE, Upgrade.ATTACK_SPEED, Upgrade.CRIT_CHANCE, Upgrade.CRIT_FACTOR, Upgrade.HEALTH, Upgrade.DEFENSE_PCT)
+
     private fun run(save: SaveData, buy: Boolean, maxSeconds: Int = 3600, god: Boolean = false, seed: Long = 7): GameEngine {
-        val e = GameEngine(TowerStats.resolve(save), UltimateWeapon.entries.associateWith { save.level(it) }, 1.0, seed = seed, godMode = god)
+        val e = GameEngine(save, UltimateWeapon.entries.associateWith { save.level(it) }, 1.0, seed = seed, godMode = god)
         var t = 0
         while (!e.gameOver && t < maxSeconds * 60) {
             e.step(); t++
-            if (buy && t % 30 == 0) RunUpgrade.entries.minByOrNull { e.runUpgradeCost(it) }?.let { e.buyRunUpgrade(it) }
+            if (buy && t % 30 == 0) listOf(Upgrade.DAMAGE, Upgrade.ATTACK_SPEED, Upgrade.HEALTH).minByOrNull { e.runUpgradeCost(it) }?.let { e.buyRunUpgrade(it) }
         }
         return e
     }
@@ -25,7 +27,7 @@ class SimulationTest {
     @Test fun upgradedTowerGoesFurther() {
         val fresh = run(SaveData(), buy = true).wave
         val s = SaveData().apply {
-            WorkshopStat.entries.forEach { workshop[it.name] = 40 }
+            OLD_SIX.forEach { workshop[it.name] = 40 }
             UltimateWeapon.entries.forEach { ultimates[it.name] = 5 }
             research[ResearchProject.LIGHT_SPEED_SHOTS.name] = 1
         }
@@ -35,8 +37,8 @@ class SimulationTest {
     }
 
     @Test fun endlessWavesWithGodModeNoCrash() {
-        val s = SaveData().apply { WorkshopStat.entries.forEach { workshop[it.name] = 200 }; UltimateWeapon.entries.forEach { ultimates[it.name] = 30 } }
-        val e = GameEngine(TowerStats.resolve(s), UltimateWeapon.entries.associateWith { 30 }, 1.0, startWave = 990, seed = 2, godMode = true)
+        val s = SaveData().apply { Upgrade.entries.forEach { workshop[it.name] = minOf(200, it.maxLevel) }; UltimateWeapon.entries.forEach { ultimates[it.name] = 30 } }
+        val e = GameEngine(s, UltimateWeapon.entries.associateWith { 30 }, 1.0, startWave = 990, seed = 2, godMode = true)
         repeat(60 * 600) { e.step() }
         println("god mode from 990: wave ${e.wave}, mobs ${e.mobs.size}, diamonds ${e.runDiamonds}")
         assertTrue(e.wave > 990)

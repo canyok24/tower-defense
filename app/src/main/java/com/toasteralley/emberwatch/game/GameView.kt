@@ -16,7 +16,8 @@ import com.toasteralley.emberwatch.core.GameEngine
 import com.toasteralley.emberwatch.core.MobShape
 import com.toasteralley.emberwatch.core.NumberFormat
 import com.toasteralley.emberwatch.core.Palette
-import com.toasteralley.emberwatch.core.RunUpgrade
+import com.toasteralley.emberwatch.core.Upgrade
+import com.toasteralley.emberwatch.core.WorkshopTab
 import com.toasteralley.emberwatch.core.SecretGesture
 import com.toasteralley.emberwatch.core.UltimateWeapon
 import kotlin.math.max
@@ -41,6 +42,8 @@ class GameView(context: Context, val engine: GameEngine) : SurfaceView(context),
         fun debugAvailable(): Boolean
     }
 
+    companion object { const val COLS = 3; const val PER_PAGE = 6 }
+
     var listener: Listener? = null
     private val gesture = SecretGesture()
 
@@ -57,7 +60,14 @@ class GameView(context: Context, val engine: GameEngine) : SurfaceView(context),
     private var fieldTop = 0f; private var fieldBottom = 0f; private var scale = 1f
     private val hud = RectF(); private val waveLabel = RectF(); private val gearBtn = RectF(); private val speedBtn = RectF()
     private val bar = RectF()
-    private val upBtns = RunUpgrade.entries.map { RectF() }
+    // in-run upgrade panel: 3 tabs + paged 3x2 grid
+    private val tabBtns = WorkshopTab.entries.map { RectF() }
+    private val pagePrev = RectF(); private val pageNext = RectF()
+    private val upBtns = List(PER_PAGE) { RectF() }
+    private var tab = WorkshopTab.ASSAULT
+    private var page = 0
+    private fun tabUpgrades() = Upgrade.ofTab(tab)
+    private fun pageCount() = (tabUpgrades().size + PER_PAGE - 1) / PER_PAGE
     private val overlayBtn = RectF(); private val overlayBtn2 = RectF()
 
     private val density = resources.displayMetrics.density
@@ -134,10 +144,23 @@ class GameView(context: Context, val engine: GameEngine) : SurfaceView(context),
         gearBtn.set(w - bh - 10 * density, by, w - 10 * density, by + bh)
         speedBtn.set(gearBtn.left - bh * 1.4f - 8 * density, by, gearBtn.left - 8 * density, by + bh)
         waveLabel.set(10 * density, hud.top, w * 0.42f, hud.bottom)
-        val barH = 78f * density
+        val pad = 6 * density
+        val tabH = 34f * density; val cellH = 52f * density
+        val barH = pad + tabH + pad + 2 * cellH + pad + pad
         bar.set(0f, h - insetBottom - barH, w, h - insetBottom.toFloat())
-        val pad = 8 * density; val bw = (w - pad * (upBtns.size + 1)) / upBtns.size
-        upBtns.forEachIndexed { i, r -> val x = pad + i * (bw + pad); r.set(x, bar.top + pad, x + bw, bar.bottom - pad) }
+        val pageW = 36 * density
+        val tabsW = w - pad * 2 - (pageW + pad) * 2
+        val tw = (tabsW - pad * (tabBtns.size - 1)) / tabBtns.size
+        tabBtns.forEachIndexed { i, r -> val x = pad + i * (tw + pad); r.set(x, bar.top + pad, x + tw, bar.top + pad + tabH) }
+        pagePrev.set(w - pad - pageW * 2 - pad, bar.top + pad, w - pad - pageW - pad, bar.top + pad + tabH)
+        pageNext.set(w - pad - pageW, bar.top + pad, w - pad, bar.top + pad + tabH)
+        val gridTop = bar.top + pad + tabH + pad
+        val cw = (w - pad * (COLS + 1)) / COLS
+        upBtns.forEachIndexed { i, r ->
+            val col = i % COLS; val row = i / COLS
+            val x = pad + col * (cw + pad); val y = gridTop + row * (cellH + pad)
+            r.set(x, y, x + cw, y + cellH)
+        }
         fieldTop = hud.bottom; fieldBottom = bar.top
         scale = w
         engine.worldH = (fieldBottom - fieldTop) / scale
@@ -156,9 +179,31 @@ class GameView(context: Context, val engine: GameEngine) : SurfaceView(context),
         c.save(); c.clipRect(0f, fieldTop, w, fieldBottom)
         drawGrid(c)
         if (e.frostActive) { fill.color = Palette.STEEL_LIGHT; fill.alpha = 22; c.drawRect(0f, fieldTop, w, fieldBottom, fill) }
-        // wall line
+        // tower contact line
         stroke.color = Palette.STEEL; stroke.alpha = 120
-        c.drawLine(0f, sy(e.wallY), w, sy(e.wallY), stroke)
+        c.drawLine(0f, sy(e.towerLineY), w, sy(e.towerLineY), stroke)
+        // Wall (Shield tab): a steel bar whose brightness tracks its HP
+        if (e.stats.wallMaxHp > 0) {
+            val frac = (e.wallHp / e.stats.wallMaxHp).toFloat().coerceIn(0f, 1f)
+            val wy = sy(e.wallLineY)
+            if (e.wallUp) {
+                fill.color = Palette.STEEL; fill.alpha = (70 + 150 * frac).toInt()
+                c.drawRect(0f, wy, w, wy + 6 * density, fill)
+                fill.color = Palette.STEEL_LIGHT; fill.alpha = 255
+                c.drawRect(0f, wy, w * frac, wy + 2 * density, fill)
+            } else {
+                stroke.color = Palette.STEEL; stroke.alpha = 60
+                c.drawLine(0f, wy, w, wy, stroke)
+            }
+            fill.alpha = 255
+        }
+        // land mines: small coral crosses (tower-side, cheap)
+        stroke.color = Palette.CORAL; stroke.alpha = 220
+        for (m in e.mines) {
+            val mx = sx(m.x); val my = sy(m.y); val r = GameEngine.MINE_RADIUS * scale
+            c.drawLine(mx - r, my, mx + r, my, stroke); c.drawLine(mx, my - r, mx, my + r, stroke)
+        }
+        stroke.alpha = 255
         // mobs
         for (m in e.mobs) {
             if (!m.alive) continue
@@ -185,6 +230,12 @@ class GameView(context: Context, val engine: GameEngine) : SurfaceView(context),
         for (s in e.enemyShots) c.drawCircle(sx(s.x), sy(s.y), 4f * density, fill)
         drawFx(c)
         drawTower(c)
+        // orbs
+        fill.color = Palette.STEEL_LIGHT; fill.alpha = 255
+        for (i in 0 until e.stats.orbs) {
+            val (ox, oy) = e.orbPosition(i)
+            c.drawCircle(sx(ox), sy(oy), GameEngine.ORB_RADIUS * scale, fill)
+        }
         c.restore()
         drawHud(c)
         drawBar(c)
@@ -225,6 +276,13 @@ class GameView(context: Context, val engine: GameEngine) : SurfaceView(context),
                 FxKind.POP -> { stroke.color = f.color; stroke.alpha = (200 * a).toInt(); c.drawCircle(sx(f.x), sy(f.y), f.x2 * scale * (2 - a), stroke) }
                 FxKind.FROST -> { fill.color = Palette.STEEL_LIGHT; fill.alpha = (70 * a).toInt(); c.drawRect(0f, fieldTop, w, fieldBottom, fill) }
                 FxKind.GRAVITY -> { fill.color = Palette.STEEL; fill.alpha = (80 * a).toInt(); c.drawRect(0f, fieldTop, w, fieldBottom, fill) }
+                FxKind.SHOCK -> { stroke.color = Palette.STEEL_LIGHT; stroke.alpha = (200 * a).toInt(); c.drawCircle(sx(f.x), sy(f.y), f.x2 * scale * (1.1f - a * 0.6f), stroke) }
+                FxKind.FREE, FxKind.DEFY -> {
+                    text.color = if (f.kind == FxKind.FREE) Palette.STEEL_LIGHT else Palette.CORAL; text.alpha = (255 * a).toInt()
+                    text.textSize = 16 * density; text.textAlign = Paint.Align.CENTER
+                    c.drawText(if (f.kind == FxKind.FREE) "FREE UPGRADE" else "DEATH DEFIED", sx(f.x), sy(f.y) - (1 - a) * 30 * density, text)
+                    text.textAlign = Paint.Align.LEFT; text.alpha = 255
+                }
                 FxKind.BOSS_WARN -> {
                     text.color = Palette.CORAL; text.alpha = (255 * a).toInt(); text.textSize = 22 * density
                     text.textAlign = Paint.Align.CENTER; c.drawText("SPIRAL BOSS", w / 2, fieldTop + 60 * density, text)
@@ -251,20 +309,31 @@ class GameView(context: Context, val engine: GameEngine) : SurfaceView(context),
         text.color = Palette.TEXT; text.textAlign = Paint.Align.RIGHT
         c.drawText("${NumberFormat.compact(max(0.0, e.health))} / ${NumberFormat.compact(e.maxHealth)}", hbR, hbT - 4 * density, text)
         text.textAlign = Paint.Align.LEFT
-        button(c, speedBtn, "${e.speed}x", true)
+        button(c, speedBtn, "${e.speed}x" + if (e.rapidActive) "!" else "", true)
         button(c, gearBtn, "II", true)
     }
 
     private fun drawBar(c: Canvas) {
         val e = engine
         fill.color = Palette.BG_PANEL; c.drawRect(0f, bar.top, w, h, fill)
-        RunUpgrade.entries.forEachIndexed { i, u ->
-            val r = upBtns[i]; val cost = e.runUpgradeCost(u)
-            button(c, r, "", e.cash >= cost)
-            text.textAlign = Paint.Align.CENTER; text.color = Palette.TEXT; text.textSize = 14 * density
-            c.drawText("${u.label} Lv${e.runLevels[i]}", r.centerX(), r.top + r.height() * 0.42f, text)
-            text.color = Palette.TEXT_DIM; text.textSize = 12 * density
-            c.drawText("$" + NumberFormat.compact(cost), r.centerX(), r.top + r.height() * 0.75f, text)
+        tabBtns.forEachIndexed { i, r -> button(c, r, WorkshopTab.entries[i].label, WorkshopTab.entries[i] == tab) }
+        val pages = pageCount()
+        button(c, pagePrev, "‹", page > 0); button(c, pageNext, "›", page < pages - 1)
+        val ups = tabUpgrades()
+        for (i in 0 until PER_PAGE) {
+            val u = ups.getOrNull(page * PER_PAGE + i) ?: continue
+            val r = upBtns[i]
+            val open = e.isRunUpgradeOpen(u); val maxed = e.isRunUpgradeMaxed(u)
+            val cost = e.runUpgradeCost(u)
+            button(c, r, "", open && !maxed && e.cash >= cost)
+            text.textAlign = Paint.Align.CENTER; text.color = Palette.TEXT; text.textSize = 11.5f * density
+            c.drawText(u.label, r.centerX(), r.top + r.height() * 0.32f, text)
+            text.color = Palette.STEEL_LIGHT; text.textSize = 10.5f * density
+            val lv = "Lv ${e.permanentLevel(u)}" + if (e.runLevel(u) > 0) "+${e.runLevel(u)}" else ""
+            c.drawText(lv + "  " + u.format(e.totalLevel(u)), r.centerX(), r.top + r.height() * 0.58f, text)
+            text.color = Palette.TEXT_DIM
+            c.drawText(when { !open -> "wave ${u.gateWave}"; maxed -> "MAX"; else -> "$" + NumberFormat.compact(cost) },
+                r.centerX(), r.top + r.height() * 0.86f, text)
             text.textAlign = Paint.Align.LEFT
         }
         // ultimate cooldown pips just above the bar
@@ -345,7 +414,14 @@ class GameView(context: Context, val engine: GameEngine) : SurfaceView(context),
             waveLabel.contains(x, y) -> if (listener?.debugAvailable() == true && gesture.onTitleTap()) {
                 e.paused = true; post { listener?.onDebugGesture() }
             }
-            else -> upBtns.forEachIndexed { i, r -> if (r.contains(x, y)) e.buyRunUpgrade(RunUpgrade.entries[i]) }
+            pagePrev.contains(x, y) -> if (page > 0) page--
+            pageNext.contains(x, y) -> if (page < pageCount() - 1) page++
+            else -> {
+                tabBtns.forEachIndexed { i, r -> if (r.contains(x, y)) { tab = WorkshopTab.entries[i]; page = 0 } }
+                upBtns.forEachIndexed { i, r ->
+                    if (r.contains(x, y)) tabUpgrades().getOrNull(page * PER_PAGE + i)?.let { e.buyRunUpgrade(it) }
+                }
+            }
         }
     }
 

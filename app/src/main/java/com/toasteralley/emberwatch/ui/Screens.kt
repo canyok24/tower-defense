@@ -16,27 +16,41 @@ import com.toasteralley.emberwatch.core.ResearchProject
 import com.toasteralley.emberwatch.core.SaveData
 import com.toasteralley.emberwatch.core.TowerStats
 import com.toasteralley.emberwatch.core.UltimateWeapon
-import com.toasteralley.emberwatch.core.WorkshopStat
+import com.toasteralley.emberwatch.core.Upgrade
+import com.toasteralley.emberwatch.core.Workshop
+import com.toasteralley.emberwatch.core.WorkshopTab
 import kotlinx.coroutines.launch
 
 private fun c(v: Double) = NumberFormat.compact(v)
 
-/** 1. Workshop: permanent tower stats bought with Coins between runs. */
+/**
+ * 1. Workshop: three tabs (ASSAULT / SHIELD / LEDGER). Coins buy permanent levels
+ * here; the in-run panel sells temporary levels of the same upgrades for Cash.
+ */
 class WorkshopActivity : ListScreenActivity() {
     override val screenTitle = "Workshop"
+    private var tab = WorkshopTab.ASSAULT
+
     override fun buildRows() {
+        list.addView(android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            for (t in WorkshopTab.entries) addView(emberButton(t.label, t != tab) { tab = t; build() },
+                android.widget.LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(6) })
+        })
         val s = TowerStats.resolve(save)
-        note("Effective: HP ${c(s.maxHealth)} · DMG ${c(s.damage)} · DEF ${"%.1f".format(s.defense * 100)}% · " +
-            "${"%.2f".format(s.fireRate)}/s · Crit ${"%.1f".format(s.critChance * 100)}% x${"%.2f".format(s.critFactor)}")
-        for (stat in WorkshopStat.entries) {
-            val lvl = save.level(stat)
-            val open = Gates.open(stat.gateWave, save, app.bypassGates)
-            if (!open) { addRow(stat.label, "Locked: reach wave ${stat.gateWave}", null); continue }
-            val maxed = lvl >= stat.maxLevel
-            val cost = stat.cost(lvl)
-            addRow("${stat.label}  Lv $lvl", "${stat.format(lvl)} → ${if (maxed) "max" else stat.format(lvl + 1)}",
-                if (maxed) "MAX" else "${c(cost)} coins", !maxed && save.coins >= cost) {
-                if (save.coins >= cost) { save.coins -= cost; save.workshop[stat.name] = lvl + 1 }
+        note(when (tab) {
+            WorkshopTab.ASSAULT -> "DMG ${c(s.damage)} · ${"%.2f".format(s.fireRate)}/s · Crit ${"%.1f".format(s.critChance * 100)}% x${"%.2f".format(s.critFactor)} · Range ${"%.2f".format(s.range)}"
+            WorkshopTab.SHIELD -> "HP ${c(s.maxHealth)} · DEF ${"%.1f".format(s.defense * 100)}% / -${c(s.defenseAbs)} · Wall ${c(s.wallMaxHp)}"
+            WorkshopTab.LEDGER -> "Coins x${"%.2f".format(s.bounty)} · Cash x${"%.2f".format(s.tribute)} · Interest ${"%.1f".format(s.interest * 100)}%"
+        } + "\nPermanent levels (Coins). In runs, the same upgrades can be raised temporarily with Cash.")
+        for (u in Upgrade.ofTab(tab)) {
+            val lvl = save.level(u)
+            if (!Workshop.gateOpen(u, save, app.bypassGates)) { addRow(u.label, "Locked: reach wave ${u.gateWave}", null); continue }
+            val maxed = lvl >= u.maxLevel
+            val cost = u.coinCost(lvl)
+            addRow("${u.label}  Lv $lvl/${u.maxLevel}", "${u.description}\n${u.format(lvl)} → ${if (maxed) "max" else u.format(lvl + 1)}",
+                if (maxed) "MAX" else "${c(cost)} coins", Workshop.canBuy(u, save, app.bypassGates)) {
+                Workshop.buy(u, save, app.bypassGates)
             }
         }
     }
@@ -149,7 +163,7 @@ class StoreActivity : ListScreenActivity() {
         val owned = app.owned
         val now = System.currentTimeMillis()
         note("All packs are permanent and stack multiplicatively with each other and with research, enhancement and boosts. " +
-            "Current pack multiplier: x${"%.1f".format(CoinMultipliers.packs(owned))} · total coin multiplier x${c(app.coinMultiplier(now))}")
+            "Current pack multiplier: x${"%.1f".format(CoinMultipliers.packs(owned))} · total coin multiplier x${c(app.displayCoinMultiplier(now))}")
         for (p in Products.ALL) {
             val has = p.id in owned
             val price = app.billing.priceOf(p.id)

@@ -62,7 +62,7 @@ class StageTest {
     }
 
     @Test fun stageMultipliersApplyToEngineAndCoins() {
-        val stats = TowerStats.resolve(SaveData())
+        val stats = SaveData()
         val e1 = GameEngine(stats, emptyMap(), 1.0, stage = 1, seed = 4)
         val e5 = GameEngine(stats, emptyMap(), 1.0, stage = 5, seed = 4)
         val m1 = e1.spawnMob(MobShape.ELLIPSE); val m5 = e5.spawnMob(MobShape.ELLIPSE)

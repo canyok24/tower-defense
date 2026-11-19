@@ -36,7 +36,7 @@ class MobTest {
     }
 
     @Test fun spiralBossEveryTenWaves() {
-        val e = GameEngine(TowerStats.resolve(SaveData()), emptyMap(), 1.0, startWave = 10, seed = 3, godMode = true)
+        val e = GameEngine(SaveData(), emptyMap(), 1.0, startWave = 10, seed = 3, godMode = true)
         repeat(60 * 20) { e.step() }
         assertTrue(e.mobs.any { it.isBoss && it.look.shape == MobShape.SPIRAL })
         val boss = e.mobs.first { it.isBoss }
@@ -56,7 +56,7 @@ class MobTest {
     }
 
     @Test fun bossRewardFeedsCoinEconomy() {
-        val e = GameEngine(TowerStats.resolve(SaveData()), emptyMap(), coinMultiplier = 2.0, startWave = 30, seed = 9)
+        val e = GameEngine(SaveData(), emptyMap(), coinMultiplier = 2.0, startWave = 30, seed = 9)
         val boss = e.spawnBoss()
         val before = e.runCoins
         e.hit(boss, Double.MAX_VALUE)

@@ -16,7 +16,6 @@ import com.toasteralley.emberwatch.core.DebugGate
 import com.toasteralley.emberwatch.core.GameEngine
 import com.toasteralley.emberwatch.core.ResearchProject
 import com.toasteralley.emberwatch.core.RunRewards
-import com.toasteralley.emberwatch.core.TowerStats
 import com.toasteralley.emberwatch.core.UltimateWeapon
 import com.toasteralley.emberwatch.debug.DebugTools
 import com.toasteralley.emberwatch.debug.InGameDebug
@@ -44,7 +43,7 @@ class GameActivity : AppCompatActivity(), GameView.Listener {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
         engine = GameEngine(
-            stats = TowerStats.resolve(save),
+            save = save,
             ultimates = UltimateWeapon.entries.associateWith { save.level(it) },
             coinMultiplier = app.coinMultiplier(),
             coreMultiplier = ResearchProject.CORE_YIELD.effect(save.level(ResearchProject.CORE_YIELD)),
@@ -52,6 +51,7 @@ class GameActivity : AppCompatActivity(), GameView.Listener {
             enhancementLevel = save.enhancement,
             startWave = DebugGate.startWave(BuildConfig.DEBUG, save),
             godMode = DebugGate.godMode(BuildConfig.DEBUG, save),
+            bypassGates = app.bypassGates,
         )
         view = GameView(this, engine).also { it.listener = this }
         setContentView(view)

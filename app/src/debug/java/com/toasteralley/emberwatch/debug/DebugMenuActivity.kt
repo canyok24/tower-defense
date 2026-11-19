@@ -9,6 +9,8 @@ import com.toasteralley.emberwatch.core.Enhancement
 import com.toasteralley.emberwatch.core.StageDefinitions
 import com.toasteralley.emberwatch.core.Stages
 import com.toasteralley.emberwatch.core.UltimateWeapon
+import com.toasteralley.emberwatch.core.Upgrade
+import com.toasteralley.emberwatch.core.WorkshopTab
 import com.toasteralley.emberwatch.ui.ListScreenActivity
 
 /** DEBUG SOURCE SET ONLY - management override menu. */
@@ -42,6 +44,21 @@ class DebugMenuActivity : ListScreenActivity() {
         addRow("Unlock all ultimate weapons", "Level 1 each (or keeps higher)", "Unlock") {
             UltimateWeapon.entries.forEach { save.ultimates[it.name] = maxOf(1, save.level(it)) }
         }
+        addRow("Set any workshop level", "Pick an ASSAULT / SHIELD / LEDGER upgrade and set its permanent level", "Pick") {
+            val ups = Upgrade.entries
+            androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Workshop upgrade")
+                .setItems(ups.map { "${it.tab.label} · ${it.label} (Lv ${save.level(it)}/${it.maxLevel})" }.toTypedArray()) { _, i ->
+                    val u = ups[i]
+                    DebugTools.askNumber(this, "${u.label} level (0-${u.maxLevel})") {
+                        save.workshop[u.name] = it.toInt().coerceIn(0, u.maxLevel); app.persist(); build()
+                    }
+                }.show()
+        }
+        for (t in WorkshopTab.entries) addRow("Max ${t.label} tab", "All ${Upgrade.ofTab(t).size} upgrades to max level", "Max") {
+            Upgrade.ofTab(t).forEach { save.workshop[it.name] = it.maxLevel }
+        }
+        addRow("Max all workshop tabs", "Every upgrade in all three tabs", "Max") { Upgrade.entries.forEach { save.workshop[it.name] = it.maxLevel } }
+        addRow("Reset workshop", "All permanent workshop levels to 0", "Reset") { save.workshop.clear() }
         addRow("Max all diamond perks", "", "Max") { DiamondPerk.entries.forEach { save.perks[it.name] = it.maxLevel } }
         addRow("Complete active research", "${save.activeResearch.size} running", "Complete") { ResearchBay(save).completeAllNow() }
 

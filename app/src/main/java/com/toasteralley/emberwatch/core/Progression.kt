@@ -50,36 +50,6 @@ object Enhancement {
     const val SOFT_KNEE = 100
 }
 
-// =====================================================================  Workshop
-enum class WorkshopStat(val label: String, val baseCost: Double, val growth: Double, val maxLevel: Int, val gateWave: Int) {
-    HEALTH("Health", 20.0, 1.13, 1000, 0),
-    ATTACK("Attack", 25.0, 1.14, 1000, 0),
-    DEFENSE("Defense", 40.0, 1.16, 300, 0),
-    ATTACK_SPEED("Attack Speed", 30.0, 1.15, 300, 0),
-    CRIT_CHANCE("Critical Chance", 60.0, 1.18, 79, Gates.CRIT_WAVE),
-    CRIT_FACTOR("Critical Factor", 50.0, 1.16, 500, Gates.CRIT_WAVE);
-
-    /** Exponential cost: base * growth^level. */
-    fun cost(level: Int): Double = floor(baseCost * growth.pow(level))
-
-    /** Raw stat at [level] before perks/research/enhancement. */
-    fun value(level: Int): Double = when (this) {
-        HEALTH -> 100.0 * (1 + 0.2 * level) * 1.01.pow(level)
-        ATTACK -> 10.0 * (1 + 0.25 * level) * 1.012.pow(level)
-        DEFENSE -> 0.75 * (1 - 0.985.pow(level))          // damage reduction, -> 75%
-        ATTACK_SPEED -> (1.0 + 0.04 * level).coerceAtMost(12.0) // shots per second
-        CRIT_CHANCE -> 0.01 * level                       // 0..0.79
-        CRIT_FACTOR -> 1.5 + 0.08 * level
-    }
-
-    fun format(level: Int): String = when (this) {
-        DEFENSE, CRIT_CHANCE -> "%.1f%%".format(value(level) * 100)
-        ATTACK_SPEED -> "%.2f/s".format(value(level))
-        CRIT_FACTOR -> "x%.2f".format(value(level))
-        else -> NumberFormat.compact(value(level))
-    }
-}
-
 // =====================================================================  Diamond perks
 enum class DiamondPerk(val label: String, val description: String, val maxLevel: Int) {
     MULT_DAMAGE("Damage Multiplier", "x1.08 damage per level (compounding)", 60),

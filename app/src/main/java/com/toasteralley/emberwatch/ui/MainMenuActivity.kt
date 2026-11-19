@@ -96,7 +96,7 @@ class MainMenuActivity : AppCompatActivity() {
         val now = System.currentTimeMillis()
         val boostLeft = (save.boostUntilMs - now).coerceAtLeast(0)
         content.addView(label("Best wave ${save.bestWave} · Coins ${NumberFormat.compact(save.coins)} · ◆ ${save.diamonds} · Cores ${save.cores}\n" +
-            "Coin multiplier x${NumberFormat.compact(app.coinMultiplier(now))}" + if (boostLeft > 0) " (boost ${NumberFormat.duration(boostLeft)})" else "",
+            "Coin multiplier x${NumberFormat.compact(app.displayCoinMultiplier(now))}" + if (boostLeft > 0) " (boost ${NumberFormat.duration(boostLeft)})" else "",
             13f, Palette.TEXT_DIM).apply { gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(12)) })
 
         // stage selector (Stages 1-24, see core/StageDefinitions.kt)

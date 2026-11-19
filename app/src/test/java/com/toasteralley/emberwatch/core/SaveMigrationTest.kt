@@ -9,7 +9,6 @@ class SaveMigrationTest {
     @Test fun v1TiersBecomeStages() {
         val v1 = SaveData().apply { version = 1; bestWave = 61; coins = 1234.0; diamonds = 30 }
         val m = SaveMigrations.migrate(v1, 1, LegacyFields(unlockedTier = 3, selectedTier = 2))
-        assertEquals(2, m.version)
         assertEquals(SaveData.CURRENT_VERSION, m.version)
         assertEquals(3, m.legacyUnlockedStage)
         assertEquals(2, m.selectedStage)
@@ -30,5 +29,33 @@ class SaveMigrationTest {
         val s = SaveData().apply { selectedStage = 4; legacyUnlockedStage = 1 }
         SaveMigrations.migrate(s, 2, LegacyFields(unlockedTier = 10, selectedTier = 10))
         assertEquals(4, s.selectedStage); assertEquals(1, s.legacyUnlockedStage)
+    }
+}
+
+class WorkshopMigrationTest {
+    @Test fun v2SixStatsMoveIntoTabs() {
+        val s = SaveData().apply {
+            version = 2
+            workshop["HEALTH"] = 12; workshop["ATTACK"] = 30; workshop["DEFENSE"] = 7
+            workshop["ATTACK_SPEED"] = 290; workshop["CRIT_CHANCE"] = 9; workshop["CRIT_FACTOR"] = 4
+            workshop["SOMETHING_OLD"] = 3
+        }
+        SaveMigrations.migrate(s, 2, LegacyFields())
+        assertEquals(3, s.version)
+        assertEquals(30, s.level(Upgrade.DAMAGE))
+        assertEquals(275, s.level(Upgrade.ATTACK_SPEED))           // clamped to new max
+        assertEquals(9, s.level(Upgrade.CRIT_CHANCE))
+        assertEquals(4, s.level(Upgrade.CRIT_FACTOR))
+        assertEquals(12, s.level(Upgrade.HEALTH))
+        assertEquals(7, s.level(Upgrade.DEFENSE_PCT))
+        assertEquals(WorkshopTab.ASSAULT, Upgrade.DAMAGE.tab); assertEquals(WorkshopTab.SHIELD, Upgrade.DEFENSE_PCT.tab)
+        assertEquals(setOf("DAMAGE", "ATTACK_SPEED", "CRIT_CHANCE", "CRIT_FACTOR", "HEALTH", "DEFENSE_PCT"), s.workshop.keys)
+    }
+
+    @Test fun v1SaveRunsBothMigrations() {
+        val s = SaveData().apply { version = 1; bestWave = 11; workshop["ATTACK"] = 5 }
+        SaveMigrations.migrate(s, 1, LegacyFields(unlockedTier = 2, selectedTier = 2))
+        assertEquals(SaveData.CURRENT_VERSION, s.version)
+        assertEquals(5, s.level(Upgrade.DAMAGE)); assertEquals(2, s.selectedStage)
     }
 }

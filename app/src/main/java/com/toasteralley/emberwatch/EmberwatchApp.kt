@@ -31,7 +31,11 @@ class EmberwatchApp : Application() {
     val owned: Set<String> get() = billing.owned.value
     val noAds: Boolean get() = owned.any { id -> Products.byId(id)?.removesAds == true }
     val bypassGates: Boolean get() = DebugGate.bypassGates(BuildConfig.DEBUG, save)
+    /** Coin multiplier passed to the engine (Bounty is applied by the engine from workshop levels). */
     fun coinMultiplier(now: Long = System.currentTimeMillis()) = CoinMultipliers.total(save, owned, now)
+    /** For menus: includes the permanent Ledger Bounty level. */
+    fun displayCoinMultiplier(now: Long = System.currentTimeMillis()) =
+        coinMultiplier(now) * com.toasteralley.emberwatch.core.Upgrade.BOUNTY.value(save.level(com.toasteralley.emberwatch.core.Upgrade.BOUNTY))
     fun research() = ResearchBay(save)
 
     /** Completes finished research timers (wall clock) and persists if anything changed. */

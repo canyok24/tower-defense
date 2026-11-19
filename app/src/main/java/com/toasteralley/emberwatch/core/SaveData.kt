@@ -39,13 +39,16 @@ class SaveData {
     var debugBypassGates: Boolean = false
     var debugStartWave: Int = 1
 
-    fun level(s: WorkshopStat) = workshop[s.name] ?: 0
+    fun level(u: Upgrade) = workshop[u.name] ?: 0
     fun level(p: DiamondPerk) = perks[p.name] ?: 0
     fun level(u: UltimateWeapon) = ultimates[u.name] ?: 0
     fun level(r: ResearchProject) = research[r.name] ?: 0
 
     companion object {
-        /** v1: 10 difficulty tiers. v2: 24 stages with per-stage best wave + milestone rewards. */
-        const val CURRENT_VERSION = 2
+        /**
+         * v1: 10 difficulty tiers. v2: 24 stages with per-stage best wave + milestone rewards.
+         * v3: Workshop split into ASSAULT / SHIELD / LEDGER (old six stats renamed).
+         */
+        const val CURRENT_VERSION = 3
     }
 }

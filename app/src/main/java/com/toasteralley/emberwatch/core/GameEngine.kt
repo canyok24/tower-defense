@@ -1,8 +1,8 @@
 package com.toasteralley.emberwatch.core
 
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.hypot
-import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -19,6 +19,8 @@ class Mob(
     val cash: Double,
     val isBoss: Boolean = false,
     val isChild: Boolean = false,
+    /** Wave whose stats this mob uses (lower than the current wave when degraded). */
+    val statWave: Int = 0,
 ) {
     var hp = maxHp
     var shield = maxHp * profile.shield
@@ -29,52 +31,70 @@ class Mob(
     var engaged = false        // reached the wall / standoff line
     var alive = true
     var hitFlash = 0f
+    /** Rend Armor shred: extra damage taken, e.g. 0.3 = +30%. */
+    var rend = 0.0
+    var orbCooldown = 0f
 }
 
 class Shot(var x: Float, var y: Float, var target: Mob?, val damage: Double, val crit: Int) {
     var vx = 0f; var vy = -1f; var alive = true
 }
 
-class EnemyShot(var x: Float, var y: Float, val vx: Float, val vy: Float, val damage: Double, val piercing: Boolean) {
+class EnemyShot(var x: Float, var y: Float, val vx: Float, val vy: Float, val damage: Double, val piercing: Boolean, val source: Mob?) {
     var alive = true
 }
 
-enum class FxKind { BEAM, NOVA, CHAIN, FROST, GRAVITY, POP, BOSS_WARN }
+class Mine(val x: Float, val y: Float) { var alive = true }
+
+enum class FxKind { BEAM, NOVA, CHAIN, FROST, GRAVITY, POP, BOSS_WARN, SHOCK, FREE, DEFY }
 class Fx(val kind: FxKind, val x: Float, val y: Float, val x2: Float, val y2: Float, val maxLife: Float, val color: Int = 0) {
     var life = maxLife
 }
 
-/** In-run upgrades bought with Cash (reset each run). */
-enum class RunUpgrade(val label: String, val baseCost: Double) {
-    ATTACK("ATK", 15.0), RATE("RATE", 20.0), HEALTH("HP", 15.0);
-    fun cost(level: Int) = kotlin.math.floor(baseCost * 1.21.pow(level))
-}
+/** Where damage came from: only TOWER hits bounce; TOWER/BOUNCE hits rend, steal life and knock back. */
+enum class HitSource { TOWER, BOUNCE, OTHER }
+
+/** Result of trying to buy an in-run (cash) workshop level. */
+enum class BuyResult { BOUGHT, FREE, NO_CASH, MAXED, LOCKED }
 
 /**
  * Pure-Kotlin simulation (no Android). World units: playfield width = 1,
  * height = [worldH] (set from the view's aspect ratio). Fixed 1/60 s steps;
  * speed-ups run more steps per frame, never a bigger dt.
+ *
+ * [save] is read-only here: permanent workshop levels, perks and research come
+ * from it; in-run (cash) workshop levels live in [runLevels] and reset each run.
  */
 class GameEngine(
-    val stats: TowerStats,
-    val ultimates: Map<UltimateWeapon, Int>,
-    val coinMultiplier: Double,
+    val save: SaveData,
+    val ultimates: Map<UltimateWeapon, Int> = UltimateWeapon.entries.associateWith { save.level(it) },
+    /** Packs x boost x research x enhancement x stage (Bounty is applied separately). */
+    val coinMultiplier: Double = 1.0,
     val coreMultiplier: Double = 1.0,
     val stage: Int = 1,
     /** Enhancement level: decides the normal-mob pool (see EnemyPool). */
-    val enhancementLevel: Int = 0,
+    val enhancementLevel: Int = save.enhancement,
     startWave: Int = 1,
     seed: Long = System.nanoTime(),
     var godMode: Boolean = false,
+    val bypassGates: Boolean = false,
 ) {
     companion object {
         const val STEP = 1f / 60f
         val SPEEDS = intArrayOf(1, 2, 3, 5)
         const val MAX_MOBS = 220
         const val MAX_FX = 120
+        const val MAX_MINES = 6
         const val TOWER_RADIUS = 0.07f
         const val WAVE_SPAWN_SECONDS = 16f
         const val WAVE_OVERTIME = 10f
+        const val ORBIT_RADIUS = 0.17f
+        const val ORB_RADIUS = 0.022f
+        const val SHOCK_RADIUS = 0.5f
+        const val MINE_RADIUS = 0.03f
+        const val MINE_SPLASH = 0.12f
+        const val BOUNCE_RANGE = 0.35f
+        const val WALL_OFFSET = 0.14f
     }
 
     private val rng = Random(seed)
@@ -83,19 +103,34 @@ class GameEngine(
         set(v) { field = v.coerceIn(1.2f, 3f) }
     val towerX = 0.5f
     val towerY get() = worldH - 0.16f
-    val wallY get() = towerY - TOWER_RADIUS - 0.02f
+    /** Line where contact mobs hit the tower. */
+    val towerLineY get() = towerY - TOWER_RADIUS - 0.02f
+    /** Line of the Wall (Shield tab) above the tower. */
+    val wallLineY get() = towerLineY - WALL_OFFSET
+    /** Backwards-compatible name: the line contact mobs currently stop at. */
+    val wallY get() = if (wallUp) wallLineY else towerLineY
 
     val mobs = ArrayList<Mob>()
     val shots = ArrayList<Shot>()
     val enemyShots = ArrayList<EnemyShot>()
+    val mines = ArrayList<Mine>()
     val fx = ArrayList<Fx>()
 
     // tower state
-    val runLevels = IntArray(RunUpgrade.entries.size)
-    var maxHealth = stats.maxHealth; private set
-    var health = maxHealth; private set
+    val runLevels = IntArray(Upgrade.entries.size)
+    var stats: TowerStats = TowerStats.resolve(save, runLevels); private set
+    val maxHealth get() = stats.maxHealth
+    var health = stats.maxHealth; private set
     var cash = stats.startingCash; private set
     private var fireCooldown = 0f
+    private var rapidTimer = 0f
+    var wallHp = stats.wallMaxHp; private set
+    private var wallDownTimer = 0f
+    val wallUp get() = stats.wallMaxHp > 0 && wallHp > 0
+    private var shockTimer = 0f
+    private var mineTimer = 0f
+    var deathDefies = 0; private set
+    var freePurchases = 0; private set
 
     // wave state
     var wave = startWave.coerceAtLeast(1); private set
@@ -123,9 +158,12 @@ class GameEngine(
     private var accumulator = 0f
 
     val speed get() = SPEEDS[speedIndex]
+    val rapidActive get() = rapidTimer > 0f
 
     init {
         for ((uw, lvl) in ultimates) if (lvl > 0) uwCooldown[uw] = uw.cooldown(lvl) * 0.5f
+        shockTimer = stats.shockPeriod.toFloat()
+        mineTimer = stats.mineInterval.toFloat()
         startWave(wave)
     }
 
@@ -147,9 +185,11 @@ class GameEngine(
         updateTower(dt)
         updateShots(dt)
         updateEnemyShots(dt)
+        updateDefenses(dt)
         updateUltimates(dt)
         updateFx(dt)
         mobs.removeAll { !it.alive }
+        mines.removeAll { !it.alive }
         if (health <= 0 && !godMode) { health = 0.0; gameOver = true }
     }
 
@@ -180,26 +220,47 @@ class GameEngine(
     }
 
     private fun completeWave() {
-        val bonusCoins = WaveRules.coinScale(wave) * 4 * coinMultiplier
-        runCoins += bonusCoins
-        cash += WaveRules.cashScale(wave) * 3
+        earnCoins(WaveRules.coinScale(wave) * 4)
+        earnCash(WaveRules.cashScale(wave) * 3)
+        // Interest Per Wave: on held cash, capped at a multiple of the wave's base cash.
+        if (stats.interest > 0) cash += minOf(cash * stats.interest, WaveRules.cashScale(wave) * Upgrade.INTEREST_CAP_WAVE_CASH)
+        // Recovery Amount, capped by Max Recovery.
+        val heal = minOf(stats.recoveryAmount, stats.maxRecovery) * maxHealth
+        if (heal > 0) health = minOf(maxHealth, health + heal)
         if (wave % 5 == 0) runCores += (1 * coreMultiplier).toLong().coerceAtLeast(1)
         startWave(wave + 1)
     }
 
+    /** Coin pipeline: base x coinMultiplier (packs, boost, research, enhancement, stage) x Bounty. */
+    private fun earnCoins(base: Double) { runCoins += base * coinMultiplier * stats.bounty }
+    /** Cash pipeline: base x Tribute. */
+    private fun earnCash(base: Double) { cash += base * stats.tribute }
+
+    /**
+     * Enemy Degrade: with chance stats.degradeChance a spawning enemy uses the
+     * stats of 1..degradeMaxWaves earlier waves (never below wave 1). Rewards
+     * still use the current wave.
+     */
+    fun rollStatWave(): Int {
+        if (stats.degradeChance <= 0 || rng.nextDouble() >= stats.degradeChance) return wave
+        return (wave - (1 + rng.nextInt(stats.degradeMaxWaves.coerceAtLeast(1)))).coerceAtLeast(1)
+    }
+
     fun spawnMob(shape: MobShape, x: Float = 0.08f + rng.nextFloat() * 0.84f, y: Float? = null, child: Boolean = false): Mob {
-        val prof = WaveRules.veteran(MobProfiles.of(shape), wave).let { if (child) it.copy(splits = false) else it }
+        val sw = rollStatWave()
+        val prof = WaveRules.veteran(MobProfiles.of(shape), sw).let { if (child) it.copy(splits = false) else it }
         val look = MobLook.random(shape, rng).let { if (child) it.copy(size = SizeTier.SMALL) else it }
-        val hp = WaveRules.hpScale(wave) * prof.hp * stageDef.hpMult * (if (child) 0.35 else 1.0)
+        val hp = WaveRules.hpScale(sw) * prof.hp * stageDef.hpMult * (if (child) 0.35 else 1.0)
         val m = Mob(
             look = look, profile = prof, maxHp = hp,
-            damage = WaveRules.damageScale(wave) * prof.damage * stageDef.damageMult,
+            damage = WaveRules.damageScale(sw) * prof.damage * stageDef.damageMult,
             x = x, y = y ?: -0.05f,
-            speed = prof.speed * WaveRules.speedScale(wave) * stageDef.speedMult.toFloat() * worldH,
+            speed = prof.speed * WaveRules.speedScale(sw) * stageDef.speedMult.toFloat() * worldH,
             radius = prof.radius * look.size.scale,
             coins = WaveRules.coinScale(wave) * prof.coin * (if (child) 0.3 else 1.0),
             cash = WaveRules.cashScale(wave) * prof.coin * (if (child) 0.3 else 1.0),
             isChild = child,
+            statWave = sw,
         )
         m.age = rng.nextFloat() * 10f
         mobs += m
@@ -213,7 +274,7 @@ class GameEngine(
         val m = Mob(
             look, prof, hp, WaveRules.damageScale(wave) * prof.damage * stageDef.damageMult,
             x = 0.5f, y = -0.1f, speed = prof.speed * worldH, radius = prof.radius,
-            coins = WaveRules.bossReward(wave), cash = WaveRules.cashScale(wave) * 25, isBoss = true,
+            coins = WaveRules.bossReward(wave), cash = WaveRules.cashScale(wave) * 25, isBoss = true, statWave = wave,
         )
         mobs += m
         bossAlive = true
@@ -225,12 +286,16 @@ class GameEngine(
     private fun updateMobs(dt: Float) {
         val slowMul = if (frostTimer > 0f) 1f - frostSlow else 1f
         val standoffY = worldH * 0.42f
+        val contactLine = wallY
         for (m in mobs) {
             if (!m.alive) continue
             m.age += dt
             if (m.hitFlash > 0) m.hitFlash -= dt
+            if (m.orbCooldown > 0) m.orbCooldown -= dt
             if (m.profile.regen > 0 && m.hp < m.maxHp) m.hp = (m.hp + m.maxHp * m.profile.regen * dt).coerceAtMost(m.maxHp)
-            val stopY = if (m.profile.ranged) standoffY else wallY - m.radius
+            val stopY = if (m.profile.ranged) standoffY else contactLine - m.radius
+            // Wall fell: mobs that were pressing on it resume their descent.
+            if (m.engaged && !m.profile.ranged && m.y < stopY - 0.005f) m.engaged = false
             if (!m.engaged) {
                 var v = m.speed * slowMul
                 if (m.profile.movement == Movement.DASH_PAUSE) v *= if ((m.age % 1.2f) < 0.6f) 2.2f else 0.05f
@@ -250,44 +315,75 @@ class GameEngine(
                         val dx = towerX - m.x; val dy = towerY - m.y
                         val d = hypot(dx, dy).coerceAtLeast(0.01f)
                         val s = 0.55f * worldH
-                        enemyShots += EnemyShot(m.x, m.y, dx / d * s, dy / d * s, m.damage, m.profile.damageType == DamageType.PIERCING)
+                        enemyShots += EnemyShot(m.x, m.y, dx / d * s, dy / d * s, m.damage, m.profile.damageType == DamageType.PIERCING, m)
                     } else {
                         m.attackTimer = if (m.isBoss) 1.5f else 1f
-                        hurtTower(m.damage, m.profile.damageType == DamageType.PIERCING)
+                        hurtTower(m.damage, m.profile.damageType == DamageType.PIERCING, m)
                     }
                 }
             }
         }
     }
 
-    private fun hurtTower(raw: Double, piercing: Boolean) {
+    /**
+     * Damage to the tower. Order: Defense % (halved vs piercing) -> Defense Absolute
+     * (at least 10% of the post-% hit gets through) -> Thorns reflect (of the raw hit)
+     * -> Wall absorbs first -> Death Defy roll on a lethal hit -> health.
+     */
+    fun hurtTower(raw: Double, piercing: Boolean, attacker: Mob? = null) {
         if (godMode) return
         val def = if (piercing) stats.defense / 2 else stats.defense
-        health -= raw * (1 - def)
+        val afterPct = raw * (1 - def)
+        var d = maxOf(afterPct * 0.1, afterPct - stats.defenseAbs)
+        if (attacker != null && attacker.alive && stats.thorns > 0) hit(attacker, raw * stats.thorns, HitSource.OTHER)
+        if (wallUp) {
+            val a = minOf(wallHp, d)
+            wallHp -= a; d -= a
+            if (wallHp <= 0) { wallHp = 0.0; wallDownTimer = stats.wallRebuildSec.toFloat() }
+        }
+        if (d <= 0) return
+        if (health - d <= 0 && stats.deathDefy > 0 && rng.nextDouble() < stats.deathDefy) {
+            health = maxOf(1.0, maxHealth * 0.01)
+            deathDefies++
+            addFx(Fx(FxKind.DEFY, towerX, towerY, 0f, 0f, 0.8f))
+            return
+        }
+        health -= d
     }
 
     // ------------------------------------------------------------------ tower
-    val effectiveDamage get() = stats.damage * (1 + 0.15 * runLevels[RunUpgrade.ATTACK.ordinal])
-    val effectiveFireRate get() = stats.fireRate * (1 + 0.06 * runLevels[RunUpgrade.RATE.ordinal])
+    val effectiveDamage get() = stats.damage
+    val effectiveFireRate get() = stats.fireRate * (if (rapidActive) stats.rapidMult else 1.0)
 
-    private fun pickTarget(): Mob? {
+    private fun inRange(m: Mob) = hypot(m.x - towerX, m.y - towerY) <= stats.range + m.radius
+
+    private fun pickTarget(exclude: Collection<Mob> = emptyList()): Mob? {
         var best: Mob? = null
-        for (m in mobs) if (m.alive && m.y > -m.radius && (best == null || m.y > best.y)) best = m
+        for (m in mobs) if (m.alive && m.y > -m.radius && inRange(m) && m !in exclude && (best == null || m.y > best.y)) best = m
         return best
     }
 
     private fun updateTower(dt: Float) {
+        if (rapidTimer > 0) rapidTimer -= dt
+        if (stats.regenPerSec > 0 && health < maxHealth) health = minOf(maxHealth, health + maxHealth * stats.regenPerSec * dt)
         fireCooldown -= dt
         if (fireCooldown > 0f) return
         val target = pickTarget() ?: return
         fireCooldown += (1f / effectiveFireRate.toFloat()).coerceAtLeast(STEP * 0.25f)
         if (fireCooldown < -STEP) fireCooldown = 0f
-        val (dmg, crit) = rollDamage(effectiveDamage)
-        if (stats.lightSpeed) {
-            addFx(Fx(FxKind.BEAM, towerX, towerY - TOWER_RADIUS, target.x, target.y, 0.08f, crit))
-            hit(target, dmg)
-        } else {
-            shots += Shot(towerX, towerY - TOWER_RADIUS, target, dmg, crit)
+        if (stats.rapidChance > 0 && !rapidActive && rng.nextDouble() < stats.rapidChance) rapidTimer = TowerStats.RAPID_FIRE_SECONDS
+        val targets = arrayListOf(target)
+        if (stats.multishotChance > 0 && rng.nextDouble() < stats.multishotChance) {
+            repeat(stats.multishotTargets) { pickTarget(targets)?.let { targets += it } }
+        }
+        for (t in targets) {
+            val (dmg, crit) = rollDamage(effectiveDamage)
+            if (stats.lightSpeed) {
+                addFx(Fx(FxKind.BEAM, towerX, towerY - TOWER_RADIUS, t.x, t.y, 0.08f, crit))
+                hit(t, dmg, HitSource.TOWER)
+            } else {
+                shots += Shot(towerX, towerY - TOWER_RADIUS, t, dmg, crit)
+            }
         }
     }
 
@@ -305,12 +401,12 @@ class GameEngine(
             if (t != null && t.alive) {
                 val dx = t.x - s.x; val dy = t.y - s.y
                 val d = hypot(dx, dy)
-                if (d <= sp * dt + t.radius) { hit(t, s.damage); s.alive = false; continue }
+                if (d <= sp * dt + t.radius) { hit(t, s.damage, HitSource.TOWER); s.alive = false; continue }
                 s.vx = dx / d; s.vy = dy / d
             } else {
                 s.target = null
                 for (m in mobs) if (m.alive && abs(m.x - s.x) < m.radius && abs(m.y - s.y) < m.radius) {
-                    hit(m, s.damage); s.alive = false; break
+                    hit(m, s.damage, HitSource.TOWER); s.alive = false; break
                 }
             }
             s.x += s.vx * sp * dt; s.y += s.vy * sp * dt
@@ -322,26 +418,51 @@ class GameEngine(
     private fun updateEnemyShots(dt: Float) {
         for (e in enemyShots) {
             e.x += e.vx * dt; e.y += e.vy * dt
-            if (hypot(e.x - towerX, e.y - towerY) < TOWER_RADIUS) { hurtTower(e.damage, e.piercing); e.alive = false }
+            val hitWall = wallUp && e.y >= wallLineY
+            if (hitWall || hypot(e.x - towerX, e.y - towerY) < TOWER_RADIUS) { hurtTower(e.damage, e.piercing, e.source); e.alive = false }
             else if (e.y > worldH + 0.1f) e.alive = false
         }
         enemyShots.removeAll { !it.alive }
     }
 
-    fun hit(m: Mob, dmg: Double) {
+    fun hit(m: Mob, dmg: Double, source: HitSource = HitSource.OTHER) {
         if (!m.alive) return
-        var d = dmg
+        var d = dmg * (1 + m.rend)
+        val dealt = minOf(d, m.hp + m.shield)
         if (m.shield > 0) { val a = minOf(m.shield, d); m.shield -= a; d -= a }
         m.hp -= d
         m.hitFlash = 0.06f
+        if (source != HitSource.OTHER) {
+            if (stats.rendPerHit > 0) m.rend = minOf(stats.rendMax, m.rend + stats.rendPerHit)
+            if (stats.lifesteal > 0) health = minOf(maxHealth, health + dealt * stats.lifesteal)
+            if (stats.knockbackChance > 0 && m.hp > 0 && rng.nextDouble() < stats.knockbackChance) knockBack(m, stats.knockbackForce.toFloat())
+        }
         if (m.hp <= 0) kill(m)
+        if (source == HitSource.TOWER && stats.bounceChance > 0 && rng.nextDouble() < stats.bounceChance) bounce(m, dmg)
+    }
+
+    private fun knockBack(m: Mob, force: Float) {
+        m.y = (m.y - if (m.isBoss) force * 0.2f else force).coerceAtLeast(0.01f)
+        if (!m.profile.ranged) m.engaged = false
+    }
+
+    private fun bounce(from: Mob, dmg: Double) {
+        var px = from.x; var py = from.y
+        val hitSet = arrayListOf(from)
+        repeat(stats.bounces) {
+            val next = mobs.filter { it.alive && it !in hitSet && hypot(it.x - px, it.y - py) < BOUNCE_RANGE }
+                .minByOrNull { hypot(it.x - px, it.y - py) } ?: return
+            addFx(Fx(FxKind.CHAIN, px, py, next.x, next.y, 0.2f))
+            hitSet += next; px = next.x; py = next.y
+            hit(next, dmg, HitSource.BOUNCE)
+        }
     }
 
     private fun kill(m: Mob) {
         m.alive = false
         kills++
-        runCoins += m.coins * coinMultiplier
-        cash += m.cash
+        earnCoins(m.coins)
+        earnCash(m.cash)
         addFx(Fx(FxKind.POP, m.x, m.y, m.radius, 0f, 0.25f, Palette.MOB_COLORS[m.look.colorIndex]))
         if (m.isBoss) {
             bossAlive = mobs.any { it.alive && it.isBoss }
@@ -352,6 +473,60 @@ class GameEngine(
             for (s in listOf(-1, 1)) {
                 val c = spawnMob(m.look.shape, (m.x + s * 0.04f).coerceIn(0.05f, 0.95f), m.y, child = true)
                 c.baseX = c.x
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ shield-tab defenses
+    fun orbPosition(i: Int): Pair<Float, Float> {
+        val a = time * 2.5f + i * (2 * Math.PI.toFloat() / stats.orbs.coerceAtLeast(1))
+        return (towerX + cos(a) * ORBIT_RADIUS) to (towerY + sin(a) * ORBIT_RADIUS)
+    }
+
+    private fun updateDefenses(dt: Float) {
+        // Wall rebuild / regen
+        if (stats.wallMaxHp > 0) {
+            if (wallHp <= 0) {
+                wallDownTimer -= dt
+                if (wallDownTimer <= 0) wallHp = stats.wallMaxHp
+            } else if (wallHp < stats.wallMaxHp) {
+                wallHp = minOf(stats.wallMaxHp, wallHp + stats.wallMaxHp * stats.wallRegenPerSec * dt)
+            }
+        }
+        // Orbs
+        for (i in 0 until stats.orbs) {
+            val (ox, oy) = orbPosition(i)
+            for (m in mobs) if (m.alive && m.orbCooldown <= 0 && hypot(m.x - ox, m.y - oy) < m.radius + ORB_RADIUS) {
+                m.orbCooldown = 0.4f; hit(m, stats.orbDamage, HitSource.OTHER)
+            }
+        }
+        // Shockwave
+        if (stats.shockPeriod > 0) {
+            shockTimer -= dt
+            if (shockTimer <= 0) {
+                val near = mobs.filter { it.alive && hypot(it.x - towerX, it.y - towerY) < SHOCK_RADIUS + it.radius }
+                if (near.isNotEmpty()) {
+                    shockTimer = stats.shockPeriod.toFloat()
+                    addFx(Fx(FxKind.SHOCK, towerX, towerY, SHOCK_RADIUS, 0f, 0.4f))
+                    near.forEach { hit(it, stats.shockDamage, HitSource.OTHER); if (it.alive) knockBack(it, 0.06f) }
+                } else shockTimer = 0f
+            }
+        }
+        // Land mines
+        if (stats.mineInterval > 0) {
+            mineTimer -= dt
+            if (mineTimer <= 0) {
+                mineTimer = stats.mineInterval.toFloat()
+                if (mines.size < MAX_MINES) mines += Mine(0.1f + rng.nextFloat() * 0.8f, worldH * (0.35f + rng.nextFloat() * 0.3f))
+            }
+            for (mine in mines) {
+                if (!mine.alive) continue
+                if (mobs.any { it.alive && hypot(it.x - mine.x, it.y - mine.y) < it.radius + MINE_RADIUS }) {
+                    mine.alive = false
+                    addFx(Fx(FxKind.NOVA, mine.x, mine.y, MINE_SPLASH, 0f, 0.3f))
+                    mobs.filter { it.alive && hypot(it.x - mine.x, it.y - mine.y) < MINE_SPLASH + it.radius }
+                        .forEach { hit(it, stats.mineDamage, HitSource.OTHER) }
+                }
             }
         }
     }
@@ -411,18 +586,40 @@ class GameEngine(
 
     val frostActive get() = frostTimer > 0
 
-    // ------------------------------------------------------------------ run upgrades (cash)
-    fun runUpgradeCost(u: RunUpgrade) = u.cost(runLevels[u.ordinal])
-    fun buyRunUpgrade(u: RunUpgrade): Boolean {
+    // ------------------------------------------------------------------ in-run workshop levels (cash)
+    fun permanentLevel(u: Upgrade) = save.level(u)
+    fun runLevel(u: Upgrade) = runLevels[u.ordinal]
+    fun totalLevel(u: Upgrade) = (permanentLevel(u) + runLevel(u)).coerceAtMost(u.maxLevel)
+    fun runUpgradeCost(u: Upgrade) = u.cashCost(runLevel(u))
+    fun isRunUpgradeOpen(u: Upgrade) = Workshop.gateOpen(u, save, bypassGates)
+    fun isRunUpgradeMaxed(u: Upgrade) = permanentLevel(u) + runLevel(u) >= u.maxLevel
+
+    /**
+     * Buys one in-run level with Cash. The tab's Free Assault / Free Shield /
+     * Free Ledger chance may make it free (no cash spent).
+     */
+    fun buyRunUpgrade(u: Upgrade): BuyResult {
+        if (gameOver) return BuyResult.LOCKED
+        if (!isRunUpgradeOpen(u)) return BuyResult.LOCKED
+        if (isRunUpgradeMaxed(u)) return BuyResult.MAXED
         val c = runUpgradeCost(u)
-        if (cash < c || gameOver) return false
-        cash -= c
+        if (cash < c) return BuyResult.NO_CASH
+        val free = rng.nextDouble() < (stats.freeChance[u.tab] ?: 0.0)
+        if (!free) cash -= c else { freePurchases++; addFx(Fx(FxKind.FREE, towerX, towerY - 0.2f, 0f, 0f, 0.8f)) }
         runLevels[u.ordinal]++
-        if (u == RunUpgrade.HEALTH) {
-            val add = stats.maxHealth * 0.12
-            maxHealth += add; health += add
-        }
-        return true
+        refreshStats()
+        return if (free) BuyResult.FREE else BuyResult.BOUGHT
+    }
+
+    private fun refreshStats() {
+        val oldMax = stats.maxHealth
+        val oldWallMax = stats.wallMaxHp
+        val oldShock = stats.shockPeriod; val oldMine = stats.mineInterval
+        stats = TowerStats.resolve(save, runLevels)
+        if (stats.maxHealth > oldMax) health += stats.maxHealth - oldMax
+        if (stats.wallMaxHp > oldWallMax && (wallHp > 0 || oldWallMax == 0.0)) wallHp += stats.wallMaxHp - oldWallMax
+        if (oldShock == 0.0 && stats.shockPeriod > 0) shockTimer = stats.shockPeriod.toFloat()
+        if (oldMine == 0.0 && stats.mineInterval > 0) mineTimer = stats.mineInterval.toFloat()
     }
 
     // ------------------------------------------------------------------ management override hooks
@@ -438,5 +635,4 @@ class GameEngine(
     /** Coins earned so far that the host hasn't banked yet. */
     private var banked = 0.0
     fun takeUnbankedCoins(): Double { val d = runCoins - banked; banked = runCoins; return d }
-
 }

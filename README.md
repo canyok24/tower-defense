@@ -54,7 +54,7 @@ Package: `com.toasteralley.emberwatch` · minSdk 24 · target/compile SDK 35 · 
 **Tower stats:** health, attack, defense (damage reduction %), attack speed, crit chance and crit factor, plus super crits from Diamond Perks.
 
 **Progression menus (each is its own screen)**
-1. **Workshop.** Permanent stats bought with Coins between runs. Costs grow exponentially (`base × growth^level`). Crit stats unlock at wave 5.
+1. **Workshop.** Three tabs, ASSAULT (10 upgrades), SHIELD (13) and LEDGER (9). Coins buy permanent levels between runs; Cash buys temporary levels of the same upgrades during a run. See [Workshop](#workshop-assault--shield--ledger).
 2. **Ultimate Weapons.** Unlocked and upgraded with Diamonds, opening at wave 20. They fire automatically on a cooldown during a run:
    - Ember Nova: area damage near the wall
    - Frost Lattice: slows every mob on the field
@@ -114,7 +114,8 @@ The total cost from 0 to 1,000 is about 1.1e23. Even L5000 (about 4e81) is still
 ```
 app/src/main/java/com/toasteralley/emberwatch/
   core/      pure Kotlin (unit-tested): shapes, behaviours, wave rules, GameEngine,
-             Workshop/Perks/Ultimates/Enhancement/Research formulas, coin multipliers,
+             WorkshopDefinitions (all 3 tabs), StageDefinitions, Perks/Ultimates/
+             Enhancement/Research formulas, coin multipliers, save migrations,
              Products, SaveData, DebugGate + SecretGesture
   game/      GameView (SurfaceView loop + rendering + input), ShapeRenderer (Path cache)
   ui/        main menu, game screen, the progression screens, Store, Settings
@@ -194,9 +195,77 @@ A hidden developer/admin menu for testing progression without grinding.
 
 **Main-menu override:** bypass all progression gates (menus, research gates, stages); unlock all 24 stages (access only, no rewards); **set the Enhancement level to anything from 0 to 100,000, even above the cap**, to test the enemy pools (for example 1500 adds dangerous shapes, 6000 adds everything); set the selected stage's best cleared wave (this pays its milestones); max all research or unlock only Light Speed Shots; unlock all Ultimate Weapons; max all Diamond Perks; complete running research timers now; set Coins, Diamonds, Research Cores and best wave; start the next run at wave N; god mode; locally grant or revoke any store pack (not a real purchase).
 
+**Workshop override (main menu):** set any upgrade in any tab to any level (0..max), max one tab, max all three tabs, or reset the workshop.
+
 **In-run override:** +1 wave, +10 waves, jump to wave N, force-spawn the Spiral Boss, toggle god mode, +1M cash, full heal.
 
 ---
+
+## Workshop: ASSAULT / SHIELD / LEDGER
+
+The Workshop is split into three tabs, the same way in the main menu and in the run.
+
+- **Between runs, Coins buy permanent levels.**
+- **During a run, Cash buys temporary in-run levels of the same upgrades.** The in-run panel (bottom of the screen) has the same three tabs, pages through each tab 6 at a time, and shows `Lv permanent+run`, the current effect and the Cash price. In-run levels reset when the run ends and stack on top of permanent levels; the effect is evaluated at the **total** level, and permanent + in-run can never exceed the upgrade's max level.
+- Every upgrade's coin cost curve, cash cost curve, max level, gate and effect formula live in one data file: `core/WorkshopDefinitions.kt`. Costs are `floor(base × growth^level)` — the coin curve uses the permanent level, the cash curve uses the in-run level. All curves are monotonic and finite up to max level (largest: Damage, ~1e58 coins at L1000).
+- Gates use your best wave reached (bypassed by the debug override).
+- Enhancement still multiplies damage, health and coin income on top. **Bounty** is a separate multiplicative factor in the coin pipeline (`coins = base × packs × boost × research × enhancement × stage × Bounty`), **Tribute** a separate factor in the cash pipeline (`cash = base × Tribute`). Menus show the coin multiplier including your permanent Bounty.
+- **Super Crit** combines multiplicatively with the Diamond Perk super crit: chance `1 − (1 − perk)(1 − workshop)`, factor `perkFactor × workshopFactor`.
+- **Enemy Degrade Chance** works like the classic "skip a level" upgrade in reverse: each spawning enemy has the shown chance to be built with the stats (HP, damage, speed, veteran traits) of a wave **1..N waves lower**, N = `1 + l/10` (6 at max). Coin and cash rewards still use the current wave. Bosses are never degraded.
+- **Damage order on the tower:** Defense % → Defense Absolute (at least 10% of the hit always gets through) → Thorns reflect (% of the raw hit) → the Wall absorbs → Death Defy (lethal hit: survive at 1% HP) → Health.
+- **Wall:** with Wall Health > 0, a steel bar sits just above the tower. Contact enemies stop at it and it absorbs all damage (contact and ranged) until it falls; it regenerates slowly and rebuilds after Wall Rebuild seconds.
+- **Recovery:** after each wave the tower heals `min(Recovery Amount, Max Recovery) × max HP`.
+- **Interest:** after each wave you get `min(cash × Interest, 40 × that wave's base cash)`.
+- Rendering stays cheap: orbs are small circles, mines are small crosses, the wall is a bar and the shockwave is an expanding ring (only tower-side effects are round; no mob is a circle).
+
+### ASSAULT (10)
+
+| Upgrade | Effect | Formula at total level `l` | Max | Coin cost (perm L) | Cash cost (run L) | Gate |
+|---|---|---|---|---|---|---|
+| **Damage** | Damage per shot | `10.0 * (1 + 0.25 * l) * 1.012.pow(l)` | 1000 | 25 × 1.14^L | 15 × 1.16^L | — |
+| **Attack Speed** | Shots per second (cap 12/s before research) | `(1.0 + 0.04 * l).coerceAtMost(12.0)` | 275 | 30 × 1.15^L | 20 × 1.18^L | — |
+| **Crit Chance** | Chance for a critical hit (cap 79%) | `(0.01 * l).coerceAtMost(0.79)` | 79 | 60 × 1.18^L | 40 × 1.20^L | wave 5 |
+| **Crit Factor** | Critical damage multiplier | `1.5 + 0.08 * l` | 500 | 50 × 1.16^L | 30 × 1.18^L | wave 5 |
+| **Range** | Targeting distance from the tower (cap 2.4) | `(1.2 + 0.02 * l).coerceAtMost(2.4)` | 60 | 40 × 1.17^L | 25 × 1.20^L | — |
+| **Multishot** | Chance to fire at extra targets (cap 50%, up to +3 targets) | `(0.01 * l).coerceAtMost(0.5)` · secondary `(1 + l / 25).coerceAtMost(3).toDouble()` | 50 | 120 × 1.20^L | 60 × 1.22^L | wave 8 |
+| **Rapid Fire** | Chance per shot to start a 2 s burst of boosted fire rate (cap 25%, x3) | `(0.005 * l).coerceAtMost(0.25)` · secondary `(2.0 + 0.02 * l).coerceAtMost(3.0)` | 50 | 150 × 1.20^L | 70 × 1.22^L | wave 10 |
+| **Bounce Shot** | Chance a hit bounces to nearby enemies (cap 50%, up to 3 bounces) | `(0.01 * l).coerceAtMost(0.5)` · secondary `(1 + l / 20).coerceAtMost(3).toDouble()` | 50 | 180 × 1.20^L | 80 × 1.22^L | wave 12 |
+| **Super Crit** | Chance on a crit to multiply again (cap 40%); stacks with the Diamond Perk | `(0.005 * l).coerceAtMost(0.4)` · secondary `1.5 + 0.05 * l` | 80 | 400 × 1.22^L | 150 × 1.24^L | wave 25 |
+| **Rend Armor** | Each hit shreds armor: that enemy takes more damage (cap +20%/hit, +200% total) | `(0.004 * l).coerceAtMost(0.2)` · secondary `(0.04 * l).coerceAtMost(2.0)` | 50 | 250 × 1.21^L | 100 × 1.23^L | wave 20 |
+
+### SHIELD (13)
+
+| Upgrade | Effect | Formula at total level `l` | Max | Coin cost (perm L) | Cash cost (run L) | Gate |
+|---|---|---|---|---|---|---|
+| **Health** | Tower max health | `100.0 * (1 + 0.2 * l) * 1.01.pow(l)` | 1000 | 20 × 1.13^L | 15 × 1.15^L | — |
+| **Health Regen** | % of max health regenerated per second (cap 4%/s) | `(0.0008 * l).coerceAtMost(0.04)` | 50 | 30 × 1.15^L | 20 × 1.18^L | — |
+| **Defense %** | Damage reduction (cap 75%) | `0.75 * (1 - 0.985.pow(l))` | 300 | 40 × 1.16^L | 30 × 1.19^L | — |
+| **Defense Absolute** | Flat damage removed from every hit (after Defense %, min 10% of the hit gets through) | `1.5 * l * 1.01.pow(l)` | 500 | 35 × 1.15^L | 25 × 1.18^L | wave 3 |
+| **Thorns** | Reflects % of damage taken back at the attacker (cap 100%) | `(0.02 * l).coerceAtMost(1.0)` | 50 | 80 × 1.18^L | 40 × 1.20^L | wave 6 |
+| **Lifesteal** | % of damage dealt heals the tower (cap 5%) | `(0.001 * l).coerceAtMost(0.05)` | 50 | 150 × 1.20^L | 70 × 1.22^L | wave 10 |
+| **Knockback** | Chance a hit pushes the enemy back up (cap 50%; bosses resist 80%) | `(0.01 * l).coerceAtMost(0.5)` · secondary `(0.02 + 0.0012 * l).coerceAtMost(0.08)` | 50 | 60 × 1.18^L | 35 × 1.20^L | wave 4 |
+| **Orbs** | Orbiting projectiles that damage enemies they touch (up to 4) | `orbCount(l).toDouble()` · secondary `0.5 + 0.05 * l` | 60 | 300 × 1.22^L | 120 × 1.24^L | wave 15 |
+| **Shockwave** | Periodic pulse that damages and pushes back nearby enemies | `if (l == 0) 0.0 else (12.0 - 0.1 * l).coerceAtLeast(4.0)` · secondary `1.0 + 0.2 * l` | 80 | 300 × 1.21^L | 120 × 1.23^L | wave 18 |
+| **Death Defy** | Chance to survive a lethal hit at 1% health (cap 30%) | `(0.005 * l).coerceAtMost(0.3)` | 60 | 500 × 1.24^L | 200 × 1.26^L | wave 25 |
+| **Wall Health** | A wall above the tower that blocks contact and absorbs damage first (up to 200% of max health) | `(0.05 * l).coerceAtMost(2.0)` | 40 | 150 × 1.19^L | 60 × 1.21^L | wave 12 |
+| **Wall Rebuild** | Wall regenerates and rebuilds faster after it falls (min 8 s) | `(30.0 - 0.4 * l).coerceAtLeast(8.0)` · secondary `(0.001 * l).coerceAtMost(0.05)` | 55 | 150 × 1.19^L | 60 × 1.21^L | wave 12 |
+| **Land Mines** | Periodically lays mines in the lane that explode on contact | `if (l == 0) 0.0 else (10.0 - 0.1 * l).coerceAtLeast(2.0)` · secondary `2.0 + 0.3 * l` | 80 | 250 × 1.21^L | 100 × 1.23^L | wave 20 |
+
+### LEDGER (9)
+
+| Upgrade | Effect | Formula at total level `l` | Max | Coin cost (perm L) | Cash cost (run L) | Gate |
+|---|---|---|---|---|---|---|
+| **Bounty** | Multiplies ALL coin income: kills, wave rewards, bosses | `1.0 + 0.03 * l` | 100 | 100 × 1.16^L | 50 × 1.20^L | — |
+| **Tribute** | Multiplies ALL cash income: kills and wave rewards | `1.0 + 0.03 * l` | 100 | 60 × 1.15^L | 30 × 1.18^L | — |
+| **Interest Per Wave** | Cash interest on held cash after each wave (cap 10%, max 40x wave cash) | `(0.002 * l).coerceAtMost(0.10)` | 50 | 200 × 1.20^L | 80 × 1.22^L | wave 5 |
+| **Free Assault** | Chance an in-run ASSAULT purchase is free (cap 25%) | `(0.005 * l).coerceAtMost(0.25)` | 50 | 250 × 1.21^L | 100 × 1.23^L | wave 8 |
+| **Free Shield** | Chance an in-run SHIELD purchase is free (cap 25%) | `(0.005 * l).coerceAtMost(0.25)` | 50 | 250 × 1.21^L | 100 × 1.23^L | wave 8 |
+| **Free Ledger** | Chance an in-run LEDGER purchase is free (cap 25%) | `(0.005 * l).coerceAtMost(0.25)` | 50 | 250 × 1.21^L | 100 × 1.23^L | wave 8 |
+| **Enemy Degrade Chance** | Chance a spawning enemy uses the stats of an earlier wave (cap 50%, 1..6 waves lower) | `(0.01 * l).coerceAtMost(0.5)` · secondary `(1 + l / 10).toDouble()` | 50 | 1000 × 1.30^L | 400 × 1.32^L | wave 15 |
+| **Recovery Amount** | Heals % of max health at the end of each wave (cap 50%) | `(0.01 * l).coerceAtMost(0.5)` | 50 | 80 × 1.17^L | 40 × 1.20^L | wave 3 |
+| **Max Recovery** | Cap on the per-wave heal, % of max health (10% -> 100%) | `(0.10 + 0.01 * l).coerceAtMost(1.0)` | 90 | 80 × 1.17^L | 40 × 1.20^L | wave 3 |
+
+Saves from 1.1.0 (save v2) are migrated to save v3: Attack → Damage, Attack Speed, Crit Chance, Crit Factor and Health keep their names, Defense → Defense %. Levels are clamped to the new max levels; unknown keys are dropped.
 
 ## Stages
 
@@ -251,7 +320,13 @@ Before each cap bump, re-check the cost curve (`Enhancement.cost`) against the c
 - the enemy pool per Enhancement level at the boundaries 0/1/1000/1001/3000/3001/5000/5001, Spiral never in the pool, the engine honouring the pool, veteran traits, and finite HP at stage 24's last wave
 - the Spiral Boss being bigger than the largest normal mob (any size tier), slower and tankier, and its reward going into the banked coins
 - stages: table shape, Stage 2 unlocking after clearing 500, Stage 1 completing at 10,000, milestones paid once along the way, stage multipliers
-- save migration v1 → v2
+- save migration v1 → v2, v2 → v3 (old six workshop stats into the new tabs, clamping) and v1 → v3
+- Workshop tabs: exactly the listed upgrades per tab (LEDGER exactly 9), no retired labels, cost curves monotonic and finite to max level, caps
+- permanent + in-run levels stacking, gates and max level in-run, permanent coin purchases
+- Free Assault/Shield/Ledger chance applied (and only to its own tab)
+- Enemy Degrade lowering the stat wave (and HP) while rewards stay at the current wave
+- Bounty in the coin pipeline and Tribute in the cash pipeline
+- Death Defy (0 at L0, ~30% at max, leaves 1% HP), the Wall absorbing damage before the tower, Defense Absolute floor and Thorns, Max Recovery capping Recovery
 - number formatting (K/M/B/T/aa…/zz, rounding edges, ∞)
 - boss reward scaling
 - 20 shapes with no forbidden ones, combo counts (≥ 2,000 base, ≥ 5,000 with extras) and tier ranking
