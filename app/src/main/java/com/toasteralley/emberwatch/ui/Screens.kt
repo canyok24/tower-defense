@@ -148,6 +148,44 @@ class ResearchActivity : ListScreenActivity() {
     }
 }
 
+/**
+ * Research tab (Mastery research): separate from the Research Bay. Unlocks once every Workshop
+ * upgrade is at max permanent level; costs Bounty; real-time timers; 2 own slots.
+ */
+class MasteryActivity : ListScreenActivity() {
+    override val screenTitle = "Research"
+    override val refreshMs = 1000L
+    private var cat = com.toasteralley.emberwatch.core.ResearchCategory.ASSAULT
+    override fun onTick() { app.tickResearch() }
+    override fun buildRows() {
+        val lab = app.masteryLab()
+        val dbg = app.researchTabDebugUnlocked
+        if (!com.toasteralley.emberwatch.core.MasteryLab.isUnlocked(save, dbg)) {
+            note("Locked. ${com.toasteralley.emberwatch.core.MasteryLab.lockedText(save)}\n" +
+                "Mastery research deepens your maxed upgrades. Research Bay projects are separate.")
+            return
+        }
+        list.addView(android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            for (t in com.toasteralley.emberwatch.core.ResearchCategory.entries) addView(emberButton(t.label.removeSuffix(" Research").uppercase(), t != cat) { cat = t; build() },
+                android.widget.LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(6) })
+        })
+        note("${cat.label} · ${com.toasteralley.emberwatch.core.MasteryLab.SLOTS} slots · paid in Bounty up front · timers keep running while the app is closed.")
+        if (save.activeMastery.isNotEmpty()) section("IN PROGRESS")
+        for (a in save.activeMastery) addRow("${a.mastery.label} → Lv ${a.targetLevel}", "Done in ${NumberFormat.duration(lab.remainingMs(a))}", null)
+        section(cat.label.uppercase())
+        for (m in com.toasteralley.emberwatch.core.Mastery.of(cat)) {
+            val lvl = save.level(m); val maxed = lvl >= m.maxLevel
+            val check = lab.check(m, dbg)
+            val desc = m.description + "\nNow ${m.format(lvl)}" + if (maxed) " · Complete" else
+                " → ${m.format(lvl + 1)} · ${c(m.bountyCost(lvl))} Bounty · ${NumberFormat.duration(m.durationMs(lvl))}"
+            addRow("${m.label}  Lv $lvl/${m.maxLevel}", desc,
+                when { maxed -> "DONE"; check is com.toasteralley.emberwatch.core.MasteryLab.StartResult.Blocked -> check.reason; else -> "Research" },
+                check == com.toasteralley.emberwatch.core.MasteryLab.StartResult.Ok) { lab.start(m, dbg) }
+        }
+    }
+}
+
 /** Store: IAP packs (Play Billing) + rewarded-ad boost. */
 class StoreActivity : ListScreenActivity() {
     override val screenTitle = "Store"

@@ -42,6 +42,7 @@
         <activity android:name=".ui.PerksActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity android:name=".ui.EnhancementActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity android:name=".ui.ResearchActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".ui.MasteryActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity android:name=".ui.StoreActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity android:name=".ui.SettingsActivity" android:exported="false" android:screenOrientation="portrait" />
     </application>

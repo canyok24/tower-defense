@@ -35,6 +35,25 @@ class DebugMenuActivity : ListScreenActivity() {
         addRow("Unlock all stages", "Grants permanent access to all ${StageDefinitions.STAGE_COUNT} stages (no rewards)", "Unlock") {
             save.legacyUnlockedStage = StageDefinitions.STAGE_COUNT
         }
+        section("RESEARCH TAB (MASTERY)")
+        addRow("Unlock Research tab", "Opens the Research tab without maxing the Workshop (${com.toasteralley.emberwatch.core.MasteryLab.lockedText(save)})",
+            if (save.debugResearchTabUnlocked) "ON" else "OFF") { save.debugResearchTabUnlocked = !save.debugResearchTabUnlocked }
+        addRow("Complete Mastery research now", "${save.activeMastery.size} running", "Finish") { com.toasteralley.emberwatch.core.MasteryLab(save).completeAllNow() }
+        addRow("Set any Mastery level", "Pick a Mastery and set its level", "Pick") {
+            val ms = com.toasteralley.emberwatch.core.Mastery.entries
+            androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Mastery")
+                .setItems(ms.map { "${it.category.label} · ${it.label} (Lv ${save.level(it)}/${it.maxLevel})" }.toTypedArray()) { _, i ->
+                    val m = ms[i]
+                    DebugTools.askNumber(this, "${m.label} level (0-${m.maxLevel})") {
+                        save.masteries[m.name] = it.toInt().coerceIn(0, m.maxLevel); app.persist(); build()
+                    }
+                }.show()
+        }
+        addRow("Max all Mastery", "Every Research tab item to max level", "Max") {
+            save.activeMastery.clear(); com.toasteralley.emberwatch.core.Mastery.entries.forEach { save.masteries[it.name] = it.maxLevel }
+        }
+        addRow("Reset Mastery", "All Research tab levels to 0", "Reset") { save.activeMastery.clear(); save.masteries.clear() }
+        section("RESEARCH BAY")
         addRow("Max all research", "Every Research Bay project to max level", "Max") {
             save.activeResearch.clear(); ResearchProject.entries.forEach { save.research[it.name] = it.maxLevel }
         }

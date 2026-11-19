@@ -10,6 +10,7 @@ object DebugGate {
     /** Saved debug flags (god mode, bypass gates, start wave) only apply in debug builds. */
     fun godMode(isDebugBuild: Boolean, save: SaveData) = isDebugBuild && save.debugGodMode
     fun bypassGates(isDebugBuild: Boolean, save: SaveData) = isDebugBuild && save.debugBypassGates
+    fun researchTabUnlocked(isDebugBuild: Boolean, save: SaveData) = isDebugBuild && save.debugResearchTabUnlocked
     fun startWave(isDebugBuild: Boolean, save: SaveData) = if (isDebugBuild) save.debugStartWave.coerceAtLeast(1) else 1
 }
 

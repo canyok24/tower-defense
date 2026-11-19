@@ -35,11 +35,17 @@ class EmberwatchApp : Application() {
     fun bountyMultiplier(now: Long = System.currentTimeMillis()) = BountyMultipliers.total(save, owned, now)
     /** For menus: includes the permanent Ledger Bounty Gain level. */
     fun displayBountyMultiplier(now: Long = System.currentTimeMillis()) =
-        bountyMultiplier(now) * com.toasteralley.emberwatch.core.Upgrade.BOUNTY_GAIN.value(save.level(com.toasteralley.emberwatch.core.Upgrade.BOUNTY_GAIN))
+        bountyMultiplier(now) * com.toasteralley.emberwatch.core.TowerStats.resolve(save).bountyGain
     fun research() = ResearchBay(save)
 
-    /** Completes finished research timers (wall clock) and persists if anything changed. */
-    fun tickResearch(): Boolean { val done = research().tick(); if (done.isNotEmpty()) persist(); return done.isNotEmpty() }
+    fun masteryLab() = com.toasteralley.emberwatch.core.MasteryLab(save)
+    val researchTabDebugUnlocked: Boolean get() = DebugGate.researchTabUnlocked(BuildConfig.DEBUG, save)
+
+    /** Completes finished Research Bay and Research tab timers (wall clock); persists if anything changed. */
+    fun tickResearch(): Boolean {
+        val done = research().tick().size + masteryLab().tick().size
+        if (done > 0) persist(); return done > 0
+    }
 
     companion object { lateinit var instance: EmberwatchApp; private set }
 }

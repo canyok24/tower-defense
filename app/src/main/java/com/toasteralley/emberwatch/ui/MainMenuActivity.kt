@@ -131,6 +131,12 @@ class MainMenuActivity : AppCompatActivity() {
         }, LinearLayout.LayoutParams(dp(280), dp(60)).apply { topMargin = dp(16) })
         menu("Workshop", 0, WorkshopActivity::class.java)
         menu("Research Bay", 0, ResearchActivity::class.java)
+        run {
+            val open = com.toasteralley.emberwatch.core.MasteryLab.isUnlocked(save, app.researchTabDebugUnlocked)
+            content.addView(emberButton(if (open) "Research" else "Research  (${com.toasteralley.emberwatch.core.MasteryLab.maxedWorkshopCount(save)}/${com.toasteralley.emberwatch.core.MasteryLab.TOTAL_WORKSHOP} maxed)") {
+                startActivity(Intent(this, MasteryActivity::class.java))   // locked screen shows progress
+            }, LinearLayout.LayoutParams(dp(280), ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })
+        }
         menu("Ultimate Weapons", Gates.ULTIMATES_WAVE, UltimatesActivity::class.java)
         menu("Diamond Perks", Gates.PERKS_WAVE, PerksActivity::class.java)
         menu("Enhancement", Gates.ENHANCEMENT_WAVE, EnhancementActivity::class.java)

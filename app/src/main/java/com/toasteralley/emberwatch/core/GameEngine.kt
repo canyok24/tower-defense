@@ -232,7 +232,7 @@ class GameEngine(
         earnBounty(WaveRules.bountyScale(wave) * 4)
         earnCash(WaveRules.cashScale(wave) * 3)
         // Interest Per Wave: on held cash, capped at a multiple of the wave's base cash.
-        if (stats.interest > 0) cash += minOf(cash * stats.interest, WaveRules.cashScale(wave) * Upgrade.INTEREST_CAP_WAVE_CASH)
+        if (stats.interest > 0) cash += minOf(cash * stats.interest, WaveRules.cashScale(wave) * stats.interestCapWaveCash)
         // Recovery Amount, capped by Max Recovery.
         val heal = minOf(stats.recoveryAmount, stats.maxRecovery) * maxHealth
         if (heal > 0) health = minOf(maxHealth, health + heal)

@@ -3,6 +3,8 @@ package com.toasteralley.emberwatch.data
 import android.content.Context
 import android.util.Log
 import com.toasteralley.emberwatch.core.ActiveResearch
+import com.toasteralley.emberwatch.core.ActiveMastery
+import com.toasteralley.emberwatch.core.Mastery
 import com.toasteralley.emberwatch.core.LegacyFields
 import com.toasteralley.emberwatch.core.SaveMigrations
 import com.toasteralley.emberwatch.core.ResearchProject
@@ -49,6 +51,13 @@ class SaveStore(context: Context) {
                     put(JSONObject().put("p", it.project.name).put("lvl", it.targetLevel).put("start", it.startMs).put("end", it.endMs))
                 }
             })
+            put("masteries", JSONObject(d.masteries as Map<*, *>))
+            put("activeMastery", JSONArray().apply {
+                d.activeMastery.forEach {
+                    put(JSONObject().put("m", it.mastery.name).put("lvl", it.targetLevel).put("start", it.startMs).put("end", it.endMs))
+                }
+            })
+            put("debugResearchTabUnlocked", d.debugResearchTabUnlocked)
             put("boostUntilMs", d.boostUntilMs); put("runsSinceInterstitial", d.runsSinceInterstitial)
             put("soundOn", d.soundOn)
             put("debugGodMode", d.debugGodMode); put("debugBypassGates", d.debugBypassGates)
@@ -91,6 +100,15 @@ class SaveStore(context: Context) {
                     activeResearch += ActiveResearch(p, o.getInt("lvl"), o.getLong("start"), o.getLong("end"))
                 }
             }
+            j.intMap("masteries", masteries)
+            j.optJSONArray("activeMastery")?.let { arr ->
+                for (i in 0 until arr.length()) {
+                    val o = arr.getJSONObject(i)
+                    val m = runCatching { Mastery.valueOf(o.getString("m")) }.getOrNull() ?: continue
+                    activeMastery += ActiveMastery(m, o.getInt("lvl"), o.getLong("start"), o.getLong("end"))
+                }
+            }
+            debugResearchTabUnlocked = j.optBoolean("debugResearchTabUnlocked")
             boostUntilMs = j.optLong("boostUntilMs"); runsSinceInterstitial = j.optInt("runsSinceInterstitial")
             soundOn = j.optBoolean("soundOn", true)
             debugGodMode = j.optBoolean("debugGodMode"); debugBypassGates = j.optBoolean("debugBypassGates")

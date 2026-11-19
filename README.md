@@ -62,7 +62,7 @@ Package: `com.toasteralley.emberwatch` · minSdk 24 · target/compile SDK 35 · 
    - Gravity Well: drags mobs back toward the top and damages them
 3. **Diamond Perks.** Paid with Diamonds, opening at wave 15: damage multiplier, health multiplier, crit-rate multiplier, critical factor, advanced crit rate, advanced crit factor, and super crits (a chance to crit again on a crit, with its own factor).
 4. **Enhancement.** One global multiplier that applies on top of every other window. It opens at wave 30, is capped at **level 1,000**, and is very expensive. See the formula and cost curve below.
-5. **Research Bay.** Its own currency (Research Cores) plus Bounty. Timers run on the real wall clock and keep going while the app is closed. Projects are gated by best wave, and 2 run at once (Bay Expansion research raises this to 4).
+5. **Research Bay.** (Separate from the endgame [Research tab](#research-tab-mastery).) Its own currency (Research Cores) plus Bounty. Timers run on the real wall clock and keep going while the app is closed. Projects are gated by best wave, and 2 run at once (Bay Expansion research raises this to 4).
    - **Light Speed Shots** is the flagship project: a single level costing 3,000,000 Bounty + 50 cores and 20 hours, unlocked at best wave 10. Shots hit instantly as a hitscan beam, and Projectile Velocity research turns into pure fire rate (+3% per level).
    - The other projects are Starting Cash, Ember Rounds (damage), Hull Integrity Research (health), Rapid Breech (fire rate), Projectile Velocity, Bounty Ledger (Bounty bonus), Core Siphon (core yield) and Bay Expansion.
 6. **Bounty multipliers.** Owned packs, a 1.5x rewarded-ad boost, Bounty Ledger research, the Enhancement multiplier, the selected Stage's Bounty multiplier and your permanent Stage milestone Bounty bonuses all multiply together and apply to every Bounty source: kills, wave bonuses and boss rewards. A rewarded ad adds 20 minutes of 1.5x, stacking up to 2 hours on the wall clock and saved across restarts. Starting Cash research raises your opening run cash.
@@ -274,6 +274,33 @@ The Workshop is split into three tabs, the same way in the main menu and in the 
 Saves from 1.1.0 (save v2) are migrated to save v3: Attack → Damage, Attack Speed, Crit Chance, Crit Factor keep their names, Health → Hull Integrity, Defense → Barrier.
 Save v4 renames the Shield keys (HEALTH → HULL_INTEGRITY, HEALTH_REGEN → CORE_REPAIR, DEFENSE_PCT → BARRIER, DEFENSE_ABS → PLATING, THORNS → COUNTERFIRE, LIFESTEAL → DRAIN, KNOCKBACK → REPULSE, ORBS → SATELLITES, SHOCKWAVE → PULSE, DEATH_DEFY → LAST_STAND, WALL_HEALTH → FORTIFICATION, WALL_REBUILD → RECONSTRUCTION, LAND_MINES → CHARGES). On every load, workshop levels are clamped to the current max levels (e.g. Crit Factor 500 → 175) and unknown keys are dropped.
 
+## Research tab (Mastery)
+
+A separate **Research** screen on the main menu, independent of the **Research Bay** (Research Bay, including Light Speed Shots, is unchanged). Data: `core/ResearchTabDefinitions.kt`.
+
+- **Unlock:** only when **every** Assault, Shield and Ledger workshop upgrade is at its max permanent level. Until then the screen and menu button show progress, e.g. `Max all Workshop upgrades: 27/32`.
+- **Cost:** Bounty, paid up front when a level starts (no cores). Costs escalate per level and stay finite at every level.
+- **Time:** real wall-clock durations, from hours up to days (capped at 14 days per level), persisted in the save, and they keep running while the app is closed. The Research tab has its **own 2 slots**.
+- **Naming:** every item is a "Mastery" so it can't be confused with Research Bay's "Hull Integrity Research".
+- **Pipelines:** Damage / Hull Integrity Mastery raise how much each level adds: `value(0) + (value(L) − value(0)) × (1 + mastery)`. Bounty Gain Mastery multiplies Bounty Gain (so all Bounty income), Tribute Mastery multiplies Tribute (all cash income). Ceilings still hold: fire rate 60/s, Core Repair 2.8% of max health/s, Barrier 90%.
+- **Debug override:** unlock the Research tab, complete running Mastery research, set any Mastery level, max / reset all.
+
+| Category | Item | Effect | Max | Bounty cost (level L) | Duration (level L) |
+|---|---|---|---|---|---|
+| Assault | **Damage Mastery** | +2% to how much each Damage level adds (per mastery level) | 50 | 1e+15 × 1.45^L | 4 h × 1.10^L (max 14 days) |
+| Assault | **Attack Speed Mastery** | +1% fire rate per level (tower ceiling 60/s still applies) | 30 | 8e+14 × 1.45^L | 4 h × 1.12^L (max 14 days) |
+| Assault | **Crit Chance Mastery** | +0.5% crit chance per level | 20 | 8e+14 × 1.50^L | 6 h × 1.12^L (max 14 days) |
+| Assault | **Crit Factor Mastery** | +2% critical bonus per level | 50 | 8e+14 × 1.45^L | 4 h × 1.10^L (max 14 days) |
+| Assault | **Super Crit Mastery** | +2% super crit bonus per level (deeper super crits) | 50 | 2e+15 × 1.45^L | 6 h × 1.10^L (max 14 days) |
+| Shield | **Hull Integrity Mastery** | +2% to how much each Hull Integrity level adds (per mastery level) | 50 | 1e+15 × 1.45^L | 4 h × 1.10^L (max 14 days) |
+| Shield | **Core Repair Mastery** | +2% Core Repair per level (2.8% max health/s ceiling still applies) | 50 | 8e+14 × 1.45^L | 4 h × 1.10^L (max 14 days) |
+| Shield | **Barrier Mastery** | +0.2% Barrier per level, past the 75% workshop cap (hard cap 90%) | 25 | 1e+15 × 1.50^L | 6 h × 1.12^L (max 14 days) |
+| Shield | **Plating Mastery** | +2% Plating per level | 50 | 8e+14 × 1.45^L | 4 h × 1.10^L (max 14 days) |
+| Ledger | **Bounty Gain Mastery** | +3% ALL Bounty income per level (multiplies Bounty Gain) | 50 | 1.5e+15 × 1.45^L | 6 h × 1.10^L (max 14 days) |
+| Ledger | **Tribute Mastery** | +3% ALL cash income per level (multiplies Tribute) | 50 | 1e+15 × 1.45^L | 4 h × 1.10^L (max 14 days) |
+| Ledger | **Interest Per Wave Mastery** | +0.1% interest per level past the 10% cap, and +5% interest ceiling per level | 20 | 1e+15 × 1.50^L | 6 h × 1.12^L (max 14 days) |
+| Ledger | **Enemy Degrade Mastery** | Degraded enemies can drop +1 more wave per level | 10 | 3e+15 × 1.70^L | 12 h × 1.15^L (max 14 days) |
+
 ## Stages
 
 All stage tuning lives in **`app/src/main/java/com/toasteralley/emberwatch/core/StageDefinitions.kt`**. These are the formulas behind the table:
@@ -328,6 +355,7 @@ Before each cap bump, re-check the cost curve (`Enhancement.cost`) against the B
 - the Enhancement formula (2.0 at L10, 100 at L1000, monotonic, milestone jumps), the cap of 1,000, and a cost curve that stays finite and increasing through L6000
 - the enemy pool per Enhancement level at the boundaries 0/1/1000/1001/3000/3001/5000/5001, Spiral never in the pool, the engine honouring the pool, veteran traits, and finite HP at stage 24's last wave
 - the Spiral Boss being bigger than the largest normal mob (any size tier), slower and tankier, and its reward going into the banked Bounty
+- Research tab (Mastery): locked until all 32 workshop upgrades are maxed (with progress text), fake-clock timers and its own 2 slots, Mastery effects applied in the damage / health / crit / Barrier / Plating / Bounty / cash / interest / degrade pipelines with ceilings kept, costs monotonic and finite
 - stages: exactly 5 stages with the formula values, saves above Stage 5 clamping to 5, Stage 2 unlocking after clearing 500, Stage 1 completing at 10,000, milestones paid once along the way, stage multipliers
 - save migration v1 → v2, v2 → v3 (old six workshop stats into the new tabs), v3 → v4 (Shield renames, clamping to new max levels), clamp-on-load and v1 → current
 - Workshop tabs: exactly the listed upgrades per tab (LEDGER exactly 9), no retired labels, cost curves monotonic and finite to max level, caps

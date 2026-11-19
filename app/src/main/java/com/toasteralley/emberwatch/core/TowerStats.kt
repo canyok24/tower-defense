@@ -38,6 +38,8 @@ data class TowerStats(
     val freeChance: Map<WorkshopTab, Double>,
     val degradeChance: Double, val degradeMaxWaves: Int,
     val recoveryAmount: Double, val maxRecovery: Double,
+    /** Interest is capped at this many times the wave's base cash (Interest Mastery raises it). */
+    val interestCapWaveCash: Double = Upgrade.INTEREST_CAP_WAVE_CASH,
 ) {
     /** Core Repair after its ceiling: min(flat HP/s, 2.8% of [maxHp] per second). */
     fun effectiveRegen(maxHp: Double = maxHealth) = minOf(regenPerSec, Upgrade.CORE_REPAIR_MAX_FRACTION * maxHp)
@@ -59,18 +61,23 @@ data class TowerStats(
             val enh = Enhancement.multiplier(save.enhancement)
             val p = { d: DiamondPerk -> save.level(d) }
             val r = { rp: ResearchProject -> save.level(rp) }
+            val m = { ms: Mastery -> ms.effect(save.level(ms)) }   // Research tab (Mastery)
+            /** "Increases how much each level adds": base value + (value(l) - value(0)) x (1 + mastery). */
+            fun mastered(u: Upgrade, l: Int, mastery: Mastery) = u.value(0) + (u.value(l) - u.value(0)) * (1 + m(mastery))
 
             // Same multipliers for Hull Integrity and Core Repair (research, perk, enhancement).
             val healthMult = 1.08.pow(p(DiamondPerk.MULT_HEALTH)) *
                 ResearchProject.LAB_HEALTH.effect(r(ResearchProject.LAB_HEALTH)) * enh
-            val health = Upgrade.HULL_INTEGRITY.value(lv(Upgrade.HULL_INTEGRITY)) * healthMult
-            val dmg = Upgrade.DAMAGE.value(lv(Upgrade.DAMAGE)) *
+            val health = mastered(Upgrade.HULL_INTEGRITY, lv(Upgrade.HULL_INTEGRITY), Mastery.HULL_INTEGRITY_MASTERY) * healthMult
+            val dmg = mastered(Upgrade.DAMAGE, lv(Upgrade.DAMAGE), Mastery.DAMAGE_MASTERY) *
                 1.08.pow(p(DiamondPerk.MULT_DAMAGE)) *
                 ResearchProject.LAB_DAMAGE.effect(r(ResearchProject.LAB_DAMAGE)) * enh
             val critChance = Upgrade.CRIT_CHANCE.value(lv(Upgrade.CRIT_CHANCE)) *
-                (1 + 0.04 * p(DiamondPerk.MULT_CRIT_RATE)) + 0.005 * p(DiamondPerk.ADV_CRIT_RATE)
+                (1 + 0.04 * p(DiamondPerk.MULT_CRIT_RATE)) + 0.005 * p(DiamondPerk.ADV_CRIT_RATE) +
+                m(Mastery.CRIT_CHANCE_MASTERY)
             val rawCritFactor = (Upgrade.CRIT_FACTOR.value(lv(Upgrade.CRIT_FACTOR)) +
-                0.15 * p(DiamondPerk.CRIT_FACTOR)) * 1.05.pow(p(DiamondPerk.ADV_CRIT_FACTOR))
+                0.15 * p(DiamondPerk.CRIT_FACTOR)) * 1.05.pow(p(DiamondPerk.ADV_CRIT_FACTOR)) *
+                (1 + m(Mastery.CRIT_FACTOR_MASTERY))
             val sc = p(DiamondPerk.SUPER_CRITS)
             val perkSuperChance = (0.01 * sc).coerceAtMost(0.5)
             val perkSuperFactor = if (sc > 0) 1 + (1.0 + 0.25 * sc) * enh else 1.0
@@ -81,19 +88,20 @@ data class TowerStats(
             val velocityLvl = r(ResearchProject.PROJECTILE_VELOCITY)
             val velocityToRate = if (lightSpeed) 1 + 0.03 * velocityLvl else 1.0
             val fireRate = Upgrade.ATTACK_SPEED.value(lv(Upgrade.ATTACK_SPEED)) *
-                ResearchProject.LAB_ATTACK_SPEED.effect(r(ResearchProject.LAB_ATTACK_SPEED)) * velocityToRate
+                ResearchProject.LAB_ATTACK_SPEED.effect(r(ResearchProject.LAB_ATTACK_SPEED)) * velocityToRate *
+                (1 + m(Mastery.ATTACK_SPEED_MASTERY))
             fun v(u: Upgrade) = u.value(lv(u))
             fun s2(u: Upgrade) = u.secondary(lv(u))
             return TowerStats(
                 maxHealth = health,
                 damage = dmg,
-                defense = v(Upgrade.BARRIER).coerceAtMost(0.9),
-                defenseAbs = v(Upgrade.PLATING),
+                defense = (v(Upgrade.BARRIER) + m(Mastery.BARRIER_MASTERY)).coerceAtMost(0.9),
+                defenseAbs = v(Upgrade.PLATING) * (1 + m(Mastery.PLATING_MASTERY)),
                 fireRate = fireRate.coerceAtMost(MAX_FIRE_RATE),
                 critChance = critChance,
                 critFactor = 1 + (rawCritFactor - 1) * enh,
                 superCritChance = 1 - (1 - perkSuperChance) * (1 - wsSuperChance),
-                superCritFactor = perkSuperFactor * wsSuperFactor,
+                superCritFactor = 1 + (perkSuperFactor * wsSuperFactor - 1) * (1 + m(Mastery.SUPER_CRIT_MASTERY)),
                 projectileSpeed = if (lightSpeed) Double.POSITIVE_INFINITY
                     else BASE_PROJECTILE_SPEED * ResearchProject.PROJECTILE_VELOCITY.effect(velocityLvl),
                 lightSpeed = lightSpeed,
@@ -104,7 +112,7 @@ data class TowerStats(
                 rapidChance = v(Upgrade.RAPID_FIRE), rapidMult = s2(Upgrade.RAPID_FIRE),
                 bounceChance = v(Upgrade.BOUNCE_SHOT), bounces = s2(Upgrade.BOUNCE_SHOT).toInt(),
                 rendPerHit = v(Upgrade.REND_ARMOR), rendMax = s2(Upgrade.REND_ARMOR),
-                regenPerSec = v(Upgrade.CORE_REPAIR) * healthMult,
+                regenPerSec = v(Upgrade.CORE_REPAIR) * healthMult * (1 + m(Mastery.CORE_REPAIR_MASTERY)),
                 thorns = v(Upgrade.COUNTERFIRE),
                 lifesteal = v(Upgrade.DRAIN),
                 knockbackChance = v(Upgrade.REPULSE), knockbackForce = s2(Upgrade.REPULSE),
@@ -114,9 +122,12 @@ data class TowerStats(
                 wallMaxHp = health * v(Upgrade.FORTIFICATION),
                 wallRebuildSec = v(Upgrade.RECONSTRUCTION), wallRegenPerSec = s2(Upgrade.RECONSTRUCTION),
                 mineInterval = v(Upgrade.CHARGES), mineDamage = dmg * s2(Upgrade.CHARGES),
-                bountyGain = v(Upgrade.BOUNTY_GAIN), tribute = v(Upgrade.TRIBUTE), interest = v(Upgrade.INTEREST),
+                bountyGain = v(Upgrade.BOUNTY_GAIN) * (1 + m(Mastery.BOUNTY_GAIN_MASTERY)),
+                tribute = v(Upgrade.TRIBUTE) * (1 + m(Mastery.TRIBUTE_MASTERY)),
+                interest = v(Upgrade.INTEREST) + m(Mastery.INTEREST_MASTERY),
+                interestCapWaveCash = Upgrade.INTEREST_CAP_WAVE_CASH * (1 + 0.05 * save.level(Mastery.INTEREST_MASTERY)),
                 freeChance = WorkshopTab.entries.associateWith { v(Upgrade.freeUpgradeFor(it)) },
-                degradeChance = v(Upgrade.ENEMY_DEGRADE), degradeMaxWaves = s2(Upgrade.ENEMY_DEGRADE).toInt(),
+                degradeChance = v(Upgrade.ENEMY_DEGRADE), degradeMaxWaves = s2(Upgrade.ENEMY_DEGRADE).toInt() + m(Mastery.ENEMY_DEGRADE_MASTERY).toInt(),
                 recoveryAmount = v(Upgrade.RECOVERY_AMOUNT), maxRecovery = v(Upgrade.MAX_RECOVERY),
             )
         }

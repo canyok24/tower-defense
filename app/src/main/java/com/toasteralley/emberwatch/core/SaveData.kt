@@ -29,6 +29,9 @@ class SaveData {
     var enhancement: Int = 0
     val research: MutableMap<String, Int> = mutableMapOf()
     val activeResearch: MutableList<ActiveResearch> = mutableListOf()
+    /** Research tab (Mastery) levels and running timers. */
+    val masteries: MutableMap<String, Int> = mutableMapOf()
+    val activeMastery: MutableList<ActiveMastery> = mutableListOf()
     /** Rewarded-ad 1.5x bounty boost runs until this wall-clock time. */
     var boostUntilMs: Long = 0
     var runsSinceInterstitial: Int = 0
@@ -38,11 +41,13 @@ class SaveData {
     var debugGodMode: Boolean = false
     var debugBypassGates: Boolean = false
     var debugStartWave: Int = 1
+    var debugResearchTabUnlocked: Boolean = false
 
     fun level(u: Upgrade) = workshop[u.name] ?: 0
     fun level(p: DiamondPerk) = perks[p.name] ?: 0
     fun level(u: UltimateWeapon) = ultimates[u.name] ?: 0
     fun level(r: ResearchProject) = research[r.name] ?: 0
+    fun level(m: Mastery) = masteries[m.name] ?: 0
 
     companion object {
         /**
