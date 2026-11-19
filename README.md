@@ -134,7 +134,16 @@ tools/render_icons.py   regenerates the legacy mipmap PNGs and the PWA icons fro
 
 ---
 
-## Building
+## Build the APK in Android Studio
+
+1. Install [Android Studio](https://developer.android.com/studio) (Ladybug or newer). It includes JDK 17, the Android SDK and the emulator.
+2. Get the code: *File → New → Project from Version Control*, URL `https://github.com/CANYOK24/tower-defense.git`. Then switch to the `emberwatch` branch (*Git → Branches → origin/emberwatch → Checkout*). Or clone it in a terminal with `git clone -b emberwatch https://github.com/CANYOK24/tower-defense.git` and open the folder.
+3. Let Gradle sync finish. If Android Studio offers to install SDK Platform 35 or build tools, accept.
+4. **Debug APK:** *Build → Build App Bundle(s) / APK(s) → Build APK(s)*. When it's done, click *locate* in the popup. The file is `app/build/outputs/apk/debug/app-debug.apk`.
+5. **Run it:** plug in an Android phone with USB debugging on (or create a virtual device in *Device Manager*), pick it in the device dropdown, and press **Run ▶**. You can also copy `app-debug.apk` to the phone and install it (allow "install unknown apps").
+6. **Release build for Play:** *Build → Generate Signed App Bundle / APK → Android App Bundle*, then create or choose your upload keystore and pick `release`. The output `app-release.aab` is what you upload to Play Console (see below). The command-line steps below do the same thing.
+
+## Building (command line)
 
 Requirements: JDK 17 and the Android SDK (platform 35). Android Studio Ladybug or newer opens the project directly.
 
