@@ -9,19 +9,41 @@ data class LegacyFields(
 /** Pure save migrations (unit-tested; SaveStore only extracts the raw fields). */
 object SaveMigrations {
     /** Old v2 WorkshopStat names -> new upgrades. */
+    /** v3 -> v4: Shield upgrades renamed (labels and enum names); formulas, caps and costs identical. */
+    val SHIELD_V3_TO_V4: Map<String, Upgrade> = mapOf(
+        "HEALTH" to Upgrade.HULL_INTEGRITY, "HEALTH_REGEN" to Upgrade.CORE_REPAIR,
+        "DEFENSE_PCT" to Upgrade.BARRIER, "DEFENSE_ABS" to Upgrade.PLATING,
+        "THORNS" to Upgrade.COUNTERFIRE, "LIFESTEAL" to Upgrade.DRAIN, "KNOCKBACK" to Upgrade.REPULSE,
+        "ORBS" to Upgrade.SATELLITES, "SHOCKWAVE" to Upgrade.PULSE, "DEATH_DEFY" to Upgrade.LAST_STAND,
+        "WALL_HEALTH" to Upgrade.FORTIFICATION, "WALL_REBUILD" to Upgrade.RECONSTRUCTION, "LAND_MINES" to Upgrade.CHARGES,
+    )
+
     val WORKSHOP_V2_TO_V3: Map<String, Upgrade> = mapOf(
         "ATTACK" to Upgrade.DAMAGE,          // Assault
         "ATTACK_SPEED" to Upgrade.ATTACK_SPEED,
         "CRIT_CHANCE" to Upgrade.CRIT_CHANCE,
         "CRIT_FACTOR" to Upgrade.CRIT_FACTOR,
-        "HEALTH" to Upgrade.HEALTH,          // Shield
-        "DEFENSE" to Upgrade.DEFENSE_PCT,
+        "HEALTH" to Upgrade.HULL_INTEGRITY,          // Shield
+        "DEFENSE" to Upgrade.BARRIER,
     )
 
     /**
      * Brings [save] (already filled with all fields that still exist) from
      * [fromVersion] up to [SaveData.CURRENT_VERSION].
      */
+    /**
+     * Clamp every workshop level to the current max level and drop unknown keys. Runs on EVERY load
+     * (not only on a version bump) so a rebalance that lowers a max level (e.g. Crit Factor 500 -> 175)
+     * clamps saves written by earlier builds of the same save version.
+     */
+    fun clampWorkshop(save: SaveData): SaveData {
+        for (key in save.workshop.keys.toList()) {
+            val u = Upgrade.entries.firstOrNull { it.name == key }
+            if (u == null) save.workshop.remove(key) else save.workshop[key] = save.workshop[key]!!.coerceIn(0, u.maxLevel)
+        }
+        return save
+    }
+
     fun migrate(save: SaveData, fromVersion: Int, legacy: LegacyFields): SaveData {
         var v = fromVersion
         if (v < 2) {
@@ -42,13 +64,16 @@ object SaveMigrations {
                 val lvl = save.workshop.remove(old) ?: continue
                 save.workshop[new.name] = maxOf(save.workshop[new.name] ?: 0, lvl)
             }
-            // Clamp to the new max levels; drop unknown keys.
-            for (key in save.workshop.keys.toList()) {
-                val u = Upgrade.entries.firstOrNull { it.name == key }
-                if (u == null) save.workshop.remove(key) else save.workshop[key] = save.workshop[key]!!.coerceIn(0, u.maxLevel)
-            }
             v = 3
         }
+        if (v < 4) {
+            for ((old, new) in SHIELD_V3_TO_V4) {
+                val lvl = save.workshop.remove(old) ?: continue
+                save.workshop[new.name] = maxOf(save.workshop[new.name] ?: 0, lvl)
+            }
+            v = 4
+        }
+        clampWorkshop(save)
         save.version = SaveData.CURRENT_VERSION
         return save
     }

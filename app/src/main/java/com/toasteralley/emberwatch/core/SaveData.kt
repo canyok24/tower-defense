@@ -49,6 +49,6 @@ class SaveData {
          * v1: 10 difficulty tiers. v2: 24 stages with per-stage best wave + milestone rewards.
          * v3: Workshop split into ASSAULT / SHIELD / LEDGER (old six stats renamed).
          */
-        const val CURRENT_VERSION = 3
+        const val CURRENT_VERSION = 4  // v4: Shield upgrades renamed (Hull Integrity, Barrier, ...)
     }
 }

@@ -40,7 +40,7 @@ class WorkshopActivity : ListScreenActivity() {
         val s = TowerStats.resolve(save)
         note(when (tab) {
             WorkshopTab.ASSAULT -> "DMG ${c(s.damage)} · ${"%.2f".format(s.fireRate)}/s · Crit ${"%.1f".format(s.critChance * 100)}% x${"%.2f".format(s.critFactor)} · Range ${"%.2f".format(s.range)}"
-            WorkshopTab.SHIELD -> "HP ${c(s.maxHealth)} · DEF ${"%.1f".format(s.defense * 100)}% / -${c(s.defenseAbs)} · Wall ${c(s.wallMaxHp)}"
+            WorkshopTab.SHIELD -> "Hull ${c(s.maxHealth)} · Repair ${c(s.effectiveRegen())}/s · Barrier ${"%.1f".format(s.defense * 100)}% · Plating -${c(s.defenseAbs)} · Fortification ${c(s.wallMaxHp)}"
             WorkshopTab.LEDGER -> "Coins x${"%.2f".format(s.bounty)} · Cash x${"%.2f".format(s.tribute)} · Interest ${"%.1f".format(s.interest * 100)}%"
         } + "\nPermanent levels (Coins). In runs, the same upgrades can be raised temporarily with Cash.")
         for (u in Upgrade.ofTab(tab)) {

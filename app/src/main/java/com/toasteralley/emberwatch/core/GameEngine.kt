@@ -46,7 +46,7 @@ class EnemyShot(var x: Float, var y: Float, val vx: Float, val vy: Float, val da
 
 class Mine(val x: Float, val y: Float) { var alive = true }
 
-enum class FxKind { BEAM, NOVA, CHAIN, FROST, GRAVITY, POP, BOSS_WARN, SHOCK, FREE, DEFY }
+enum class FxKind { BEAM, NOVA, CHAIN, FROST, GRAVITY, POP, BOSS_WARN, SHOCK, FREE, LAST_STAND }
 class Fx(val kind: FxKind, val x: Float, val y: Float, val x2: Float, val y2: Float, val maxLife: Float, val color: Int = 0) {
     var life = maxLife
 }
@@ -81,6 +81,13 @@ class GameEngine(
 ) {
     companion object {
         const val STEP = 1f / 60f
+        const val MAX_SHOTS_PER_STEP = 4
+        /**
+         * Hull Integrity starts at 12 (was 100), so all enemy damage is scaled by 0.12 to keep the early
+         * game identical. Counterfire reflects in pre-scale units and Drain heals in post-scale units, so
+         * both keep their old balance relative to enemy HP and tower HP.
+         */
+        const val ENEMY_DAMAGE_SCALE = 0.12
         val SPEEDS = intArrayOf(1, 2, 3, 5)
         const val MAX_MOBS = 220
         const val MAX_FX = 120
@@ -131,6 +138,8 @@ class GameEngine(
     private var mineTimer = 0f
     var deathDefies = 0; private set
     var freePurchases = 0; private set
+    /** Tower shots fired this run (for tests / stats). */
+    var shotsFired = 0L; private set
 
     // wave state
     var wave = startWave.coerceAtLeast(1); private set
@@ -253,7 +262,7 @@ class GameEngine(
         val hp = WaveRules.hpScale(sw) * prof.hp * stageDef.hpMult * (if (child) 0.35 else 1.0)
         val m = Mob(
             look = look, profile = prof, maxHp = hp,
-            damage = WaveRules.damageScale(sw) * prof.damage * stageDef.damageMult,
+            damage = WaveRules.damageScale(sw) * prof.damage * stageDef.damageMult * ENEMY_DAMAGE_SCALE,
             x = x, y = y ?: -0.05f,
             speed = prof.speed * WaveRules.speedScale(sw) * stageDef.speedMult.toFloat() * worldH,
             radius = prof.radius * look.size.scale,
@@ -272,7 +281,7 @@ class GameEngine(
         val look = MobLook(MobShape.SPIRAL, 0, OutlineStyle.GLOW, SizeTier.LARGE, rotationSpeed = 0.8f, pulsing = true, innerShape = MobShape.YIN_YANG.ordinal)
         val hp = WaveRules.hpScale(wave) * prof.hp * stageDef.hpMult * (1 + wave / 100.0)
         val m = Mob(
-            look, prof, hp, WaveRules.damageScale(wave) * prof.damage * stageDef.damageMult,
+            look, prof, hp, WaveRules.damageScale(wave) * prof.damage * stageDef.damageMult * ENEMY_DAMAGE_SCALE,
             x = 0.5f, y = -0.1f, speed = prof.speed * worldH, radius = prof.radius,
             coins = WaveRules.bossReward(wave), cash = WaveRules.cashScale(wave) * 25, isBoss = true, statWave = wave,
         )
@@ -335,7 +344,7 @@ class GameEngine(
         val def = if (piercing) stats.defense / 2 else stats.defense
         val afterPct = raw * (1 - def)
         var d = maxOf(afterPct * 0.1, afterPct - stats.defenseAbs)
-        if (attacker != null && attacker.alive && stats.thorns > 0) hit(attacker, raw * stats.thorns, HitSource.OTHER)
+        if (attacker != null && attacker.alive && stats.thorns > 0) hit(attacker, raw / ENEMY_DAMAGE_SCALE * stats.thorns, HitSource.OTHER)
         if (wallUp) {
             val a = minOf(wallHp, d)
             wallHp -= a; d -= a
@@ -345,7 +354,7 @@ class GameEngine(
         if (health - d <= 0 && stats.deathDefy > 0 && rng.nextDouble() < stats.deathDefy) {
             health = maxOf(1.0, maxHealth * 0.01)
             deathDefies++
-            addFx(Fx(FxKind.DEFY, towerX, towerY, 0f, 0f, 0.8f))
+            addFx(Fx(FxKind.LAST_STAND, towerX, towerY, 0f, 0f, 0.8f))
             return
         }
         health -= d
@@ -365,26 +374,32 @@ class GameEngine(
 
     private fun updateTower(dt: Float) {
         if (rapidTimer > 0) rapidTimer -= dt
-        if (stats.regenPerSec > 0 && health < maxHealth) health = minOf(maxHealth, health + maxHealth * stats.regenPerSec * dt)
+        if (stats.regenPerSec > 0 && health < maxHealth) health = minOf(maxHealth, health + stats.effectiveRegen(maxHealth) * dt)
         fireCooldown -= dt
-        if (fireCooldown > 0f) return
-        val target = pickTarget() ?: return
-        fireCooldown += (1f / effectiveFireRate.toFloat()).coerceAtLeast(STEP * 0.25f)
-        if (fireCooldown < -STEP) fireCooldown = 0f
-        if (stats.rapidChance > 0 && !rapidActive && rng.nextDouble() < stats.rapidChance) rapidTimer = TowerStats.RAPID_FIRE_SECONDS
-        val targets = arrayListOf(target)
-        if (stats.multishotChance > 0 && rng.nextDouble() < stats.multishotChance) {
-            repeat(stats.multishotTargets) { pickTarget(targets)?.let { targets += it } }
-        }
-        for (t in targets) {
-            val (dmg, crit) = rollDamage(effectiveDamage)
-            if (stats.lightSpeed) {
-                addFx(Fx(FxKind.BEAM, towerX, towerY - TOWER_RADIUS, t.x, t.y, 0.08f, crit))
-                hit(t, dmg, HitSource.TOWER)
-            } else {
-                shots += Shot(towerX, towerY - TOWER_RADIUS, t, dmg, crit)
+        // Several shots per 1/60 s step at high rates (40/s workshop, x3 Rapid Fire, research):
+        // up to MAX_SHOTS_PER_STEP per step, i.e. 240 shots/s max at 1x speed.
+        var fired = 0
+        while (fireCooldown <= 0f && fired < MAX_SHOTS_PER_STEP) {
+            val target = pickTarget() ?: break
+            fireCooldown += (1f / effectiveFireRate.toFloat()).coerceAtLeast(STEP / MAX_SHOTS_PER_STEP)
+            fired++
+            if (stats.rapidChance > 0 && !rapidActive && rng.nextDouble() < stats.rapidChance) rapidTimer = TowerStats.RAPID_FIRE_SECONDS
+            val targets = arrayListOf(target)
+            if (stats.multishotChance > 0 && rng.nextDouble() < stats.multishotChance) {
+                repeat(stats.multishotTargets) { pickTarget(targets)?.let { targets += it } }
+            }
+            for (t in targets) {
+                val (dmg, crit) = rollDamage(effectiveDamage)
+                if (stats.lightSpeed) {
+                    if (fired == 1) addFx(Fx(FxKind.BEAM, towerX, towerY - TOWER_RADIUS, t.x, t.y, 0.08f, crit))
+                    hit(t, dmg, HitSource.TOWER)
+                } else {
+                    shots += Shot(towerX, towerY - TOWER_RADIUS, t, dmg, crit)
+                }
             }
         }
+        if (fireCooldown < -STEP) fireCooldown = 0f
+        shotsFired += fired
     }
 
     /** Returns damage and crit level (0 none, 1 crit, 2 super crit). */
@@ -434,7 +449,7 @@ class GameEngine(
         m.hitFlash = 0.06f
         if (source != HitSource.OTHER) {
             if (stats.rendPerHit > 0) m.rend = minOf(stats.rendMax, m.rend + stats.rendPerHit)
-            if (stats.lifesteal > 0) health = minOf(maxHealth, health + dealt * stats.lifesteal)
+            if (stats.lifesteal > 0) health = minOf(maxHealth, health + dealt * stats.lifesteal * ENEMY_DAMAGE_SCALE)
             if (stats.knockbackChance > 0 && m.hp > 0 && rng.nextDouble() < stats.knockbackChance) knockBack(m, stats.knockbackForce.toFloat())
         }
         if (m.hp <= 0) kill(m)

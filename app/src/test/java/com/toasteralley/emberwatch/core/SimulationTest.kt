@@ -4,14 +4,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SimulationTest {
-    private val OLD_SIX = listOf(Upgrade.DAMAGE, Upgrade.ATTACK_SPEED, Upgrade.CRIT_CHANCE, Upgrade.CRIT_FACTOR, Upgrade.HEALTH, Upgrade.DEFENSE_PCT)
+    private val OLD_SIX = listOf(Upgrade.DAMAGE, Upgrade.ATTACK_SPEED, Upgrade.CRIT_CHANCE, Upgrade.CRIT_FACTOR, Upgrade.HULL_INTEGRITY, Upgrade.BARRIER)
 
     private fun run(save: SaveData, buy: Boolean, maxSeconds: Int = 3600, god: Boolean = false, seed: Long = 7): GameEngine {
         val e = GameEngine(save, UltimateWeapon.entries.associateWith { save.level(it) }, 1.0, seed = seed, godMode = god)
         var t = 0
         while (!e.gameOver && t < maxSeconds * 60) {
             e.step(); t++
-            if (buy && t % 30 == 0) listOf(Upgrade.DAMAGE, Upgrade.ATTACK_SPEED, Upgrade.HEALTH).minByOrNull { e.runUpgradeCost(it) }?.let { e.buyRunUpgrade(it) }
+            if (buy && t % 30 == 0) listOf(Upgrade.DAMAGE, Upgrade.ATTACK_SPEED, Upgrade.HULL_INTEGRITY).minByOrNull { e.runUpgradeCost(it) }?.let { e.buyRunUpgrade(it) }
         }
         return e
     }

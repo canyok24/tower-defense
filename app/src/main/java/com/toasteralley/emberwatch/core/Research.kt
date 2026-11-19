@@ -24,7 +24,7 @@ enum class ResearchProject(
         "Shots hit instantly (hitscan beam). Projectile Velocity research converts into pure fire rate.", 1, 10),
     STARTING_CASH("Starting Cash", "+30 opening run cash per level", 25, 0),
     LAB_DAMAGE("Ember Rounds", "+6% damage per level", 40, 3),
-    LAB_HEALTH("Wall Plating", "+6% health per level", 40, 3),
+    LAB_HEALTH("Hull Integrity Research", "+6% hull integrity (max health) per level", 40, 3),
     LAB_ATTACK_SPEED("Rapid Breech", "+3% fire rate per level", 30, 5),
     PROJECTILE_VELOCITY("Projectile Velocity", "+12% shot speed per level (after Light Speed: +3% fire rate per level)", 10, 4),
     COIN_BONUS("Coin Ledger", "+4% coins per level (multiplies all coin income)", 30, 8),

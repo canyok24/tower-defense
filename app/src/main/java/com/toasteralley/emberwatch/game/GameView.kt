@@ -182,7 +182,7 @@ class GameView(context: Context, val engine: GameEngine) : SurfaceView(context),
         // tower contact line
         stroke.color = Palette.STEEL; stroke.alpha = 120
         c.drawLine(0f, sy(e.towerLineY), w, sy(e.towerLineY), stroke)
-        // Wall (Shield tab): a steel bar whose brightness tracks its HP
+        // Fortification (Shield tab): a steel bar whose brightness tracks its HP
         if (e.stats.wallMaxHp > 0) {
             val frac = (e.wallHp / e.stats.wallMaxHp).toFloat().coerceIn(0f, 1f)
             val wy = sy(e.wallLineY)
@@ -277,10 +277,10 @@ class GameView(context: Context, val engine: GameEngine) : SurfaceView(context),
                 FxKind.FROST -> { fill.color = Palette.STEEL_LIGHT; fill.alpha = (70 * a).toInt(); c.drawRect(0f, fieldTop, w, fieldBottom, fill) }
                 FxKind.GRAVITY -> { fill.color = Palette.STEEL; fill.alpha = (80 * a).toInt(); c.drawRect(0f, fieldTop, w, fieldBottom, fill) }
                 FxKind.SHOCK -> { stroke.color = Palette.STEEL_LIGHT; stroke.alpha = (200 * a).toInt(); c.drawCircle(sx(f.x), sy(f.y), f.x2 * scale * (1.1f - a * 0.6f), stroke) }
-                FxKind.FREE, FxKind.DEFY -> {
+                FxKind.FREE, FxKind.LAST_STAND -> {
                     text.color = if (f.kind == FxKind.FREE) Palette.STEEL_LIGHT else Palette.CORAL; text.alpha = (255 * a).toInt()
                     text.textSize = 16 * density; text.textAlign = Paint.Align.CENTER
-                    c.drawText(if (f.kind == FxKind.FREE) "FREE UPGRADE" else "DEATH DEFIED", sx(f.x), sy(f.y) - (1 - a) * 30 * density, text)
+                    c.drawText(if (f.kind == FxKind.FREE) "FREE UPGRADE" else "LAST STAND", sx(f.x), sy(f.y) - (1 - a) * 30 * density, text)
                     text.textAlign = Paint.Align.LEFT; text.alpha = 255
                 }
                 FxKind.BOSS_WARN -> {

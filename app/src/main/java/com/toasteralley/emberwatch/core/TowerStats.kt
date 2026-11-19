@@ -24,7 +24,7 @@ data class TowerStats(
     val bounceChance: Double, val bounces: Int,
     val rendPerHit: Double, val rendMax: Double,
     // Shield extras
-    val regenPerSec: Double,      // fraction of max health
+    val regenPerSec: Double,      // flat HP per second (Core Repair, scaled like max health), before the ceiling
     val thorns: Double,
     val lifesteal: Double,
     val knockbackChance: Double, val knockbackForce: Double,
@@ -39,9 +39,14 @@ data class TowerStats(
     val degradeChance: Double, val degradeMaxWaves: Int,
     val recoveryAmount: Double, val maxRecovery: Double,
 ) {
+    /** Core Repair after its ceiling: min(flat HP/s, 2.8% of [maxHp] per second). */
+    fun effectiveRegen(maxHp: Double = maxHealth) = minOf(regenPerSec, Upgrade.CORE_REPAIR_MAX_FRACTION * maxHp)
+
     companion object {
         const val BASE_PROJECTILE_SPEED = 1.1
         const val RAPID_FIRE_SECONDS = 2f
+        /** Tower fire-rate ceiling after research (workshop alone reaches 40/s). */
+        const val MAX_FIRE_RATE = 60.0
 
         /**
          * Resolution: workshop level = permanent + [runLevels] (in-run, indexed by
@@ -55,9 +60,10 @@ data class TowerStats(
             val p = { d: DiamondPerk -> save.level(d) }
             val r = { rp: ResearchProject -> save.level(rp) }
 
-            val health = Upgrade.HEALTH.value(lv(Upgrade.HEALTH)) *
-                1.08.pow(p(DiamondPerk.MULT_HEALTH)) *
+            // Same multipliers for Hull Integrity and Core Repair (research, perk, enhancement).
+            val healthMult = 1.08.pow(p(DiamondPerk.MULT_HEALTH)) *
                 ResearchProject.LAB_HEALTH.effect(r(ResearchProject.LAB_HEALTH)) * enh
+            val health = Upgrade.HULL_INTEGRITY.value(lv(Upgrade.HULL_INTEGRITY)) * healthMult
             val dmg = Upgrade.DAMAGE.value(lv(Upgrade.DAMAGE)) *
                 1.08.pow(p(DiamondPerk.MULT_DAMAGE)) *
                 ResearchProject.LAB_DAMAGE.effect(r(ResearchProject.LAB_DAMAGE)) * enh
@@ -81,9 +87,9 @@ data class TowerStats(
             return TowerStats(
                 maxHealth = health,
                 damage = dmg,
-                defense = v(Upgrade.DEFENSE_PCT).coerceAtMost(0.9),
-                defenseAbs = v(Upgrade.DEFENSE_ABS),
-                fireRate = fireRate.coerceAtMost(40.0),
+                defense = v(Upgrade.BARRIER).coerceAtMost(0.9),
+                defenseAbs = v(Upgrade.PLATING),
+                fireRate = fireRate.coerceAtMost(MAX_FIRE_RATE),
                 critChance = critChance,
                 critFactor = 1 + (rawCritFactor - 1) * enh,
                 superCritChance = 1 - (1 - perkSuperChance) * (1 - wsSuperChance),
@@ -98,16 +104,16 @@ data class TowerStats(
                 rapidChance = v(Upgrade.RAPID_FIRE), rapidMult = s2(Upgrade.RAPID_FIRE),
                 bounceChance = v(Upgrade.BOUNCE_SHOT), bounces = s2(Upgrade.BOUNCE_SHOT).toInt(),
                 rendPerHit = v(Upgrade.REND_ARMOR), rendMax = s2(Upgrade.REND_ARMOR),
-                regenPerSec = v(Upgrade.HEALTH_REGEN),
-                thorns = v(Upgrade.THORNS),
-                lifesteal = v(Upgrade.LIFESTEAL),
-                knockbackChance = v(Upgrade.KNOCKBACK), knockbackForce = s2(Upgrade.KNOCKBACK),
-                orbs = v(Upgrade.ORBS).toInt(), orbDamage = dmg * s2(Upgrade.ORBS),
-                shockPeriod = v(Upgrade.SHOCKWAVE), shockDamage = dmg * s2(Upgrade.SHOCKWAVE),
-                deathDefy = v(Upgrade.DEATH_DEFY),
-                wallMaxHp = health * v(Upgrade.WALL_HEALTH),
-                wallRebuildSec = v(Upgrade.WALL_REBUILD), wallRegenPerSec = s2(Upgrade.WALL_REBUILD),
-                mineInterval = v(Upgrade.LAND_MINES), mineDamage = dmg * s2(Upgrade.LAND_MINES),
+                regenPerSec = v(Upgrade.CORE_REPAIR) * healthMult,
+                thorns = v(Upgrade.COUNTERFIRE),
+                lifesteal = v(Upgrade.DRAIN),
+                knockbackChance = v(Upgrade.REPULSE), knockbackForce = s2(Upgrade.REPULSE),
+                orbs = v(Upgrade.SATELLITES).toInt(), orbDamage = dmg * s2(Upgrade.SATELLITES),
+                shockPeriod = v(Upgrade.PULSE), shockDamage = dmg * s2(Upgrade.PULSE),
+                deathDefy = v(Upgrade.LAST_STAND),
+                wallMaxHp = health * v(Upgrade.FORTIFICATION),
+                wallRebuildSec = v(Upgrade.RECONSTRUCTION), wallRegenPerSec = s2(Upgrade.RECONSTRUCTION),
+                mineInterval = v(Upgrade.CHARGES), mineDamage = dmg * s2(Upgrade.CHARGES),
                 bounty = v(Upgrade.BOUNTY), tribute = v(Upgrade.TRIBUTE), interest = v(Upgrade.INTEREST),
                 freeChance = WorkshopTab.entries.associateWith { v(Upgrade.freeUpgradeFor(it)) },
                 degradeChance = v(Upgrade.ENEMY_DEGRADE), degradeMaxWaves = s2(Upgrade.ENEMY_DEGRADE).toInt(),

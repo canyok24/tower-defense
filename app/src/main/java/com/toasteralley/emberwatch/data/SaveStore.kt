@@ -70,7 +70,7 @@ class SaveStore(context: Context) {
             val from = j.optInt("version", 1)
             return if (from < SaveData.CURRENT_VERSION) SaveMigrations.migrate(d, from,
                 LegacyFields(unlockedTier = j.optInt("unlockedTier", 1), selectedTier = j.optInt("selectedTier", 1)))
-            else d
+            else SaveMigrations.clampWorkshop(d)
         }
 
         private fun readFields(j: JSONObject): SaveData = SaveData().apply {

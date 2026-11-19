@@ -207,51 +207,57 @@ The Workshop is split into three tabs, the same way in the main menu and in the 
 
 - **Between runs, Coins buy permanent levels.**
 - **During a run, Cash buys temporary in-run levels of the same upgrades.** The in-run panel (bottom of the screen) has the same three tabs, pages through each tab 6 at a time, and shows `Lv permanent+run`, the current effect and the Cash price. In-run levels reset when the run ends and stack on top of permanent levels; the effect is evaluated at the **total** level, and permanent + in-run can never exceed the upgrade's max level.
-- Every upgrade's coin cost curve, cash cost curve, max level, gate and effect formula live in one data file: `core/WorkshopDefinitions.kt`. Costs are `floor(base × growth^level)` — the coin curve uses the permanent level, the cash curve uses the in-run level. All curves are monotonic and finite up to max level (largest: Damage, ~1e58 coins at L1000).
+- Every upgrade's coin cost curve, cash cost curve, max level, gate and effect formula live in one data file: `core/WorkshopDefinitions.kt`. Costs are `floor(base × growth^level)` — the coin curve uses the permanent level, the cash curve uses the in-run level. All curves are monotonic and finite up to max level. Where `growth^L` would overflow a double before max level, the curve keeps the original exponential exactly up to a threshold and continues with a softer per-level growth (see the cost columns): Damage coins exact to L5000 (~1e286, ~1e303 at L10,000), Damage cash exact to L2500; Hull Integrity coins exact to L5000, cash to L2500; Core Repair coins exact to L4500, cash to L2500; Plating coins exact to L4500, cash to L2500; Attack Speed softens after L300.
 - Gates use your best wave reached (bypassed by the debug override).
 - Enhancement still multiplies damage, health and coin income on top. **Bounty** is a separate multiplicative factor in the coin pipeline (`coins = base × packs × boost × research × enhancement × stage × Bounty`), **Tribute** a separate factor in the cash pipeline (`cash = base × Tribute`). Menus show the coin multiplier including your permanent Bounty.
 - **Super Crit** combines multiplicatively with the Diamond Perk super crit: chance `1 − (1 − perk)(1 − workshop)`, factor `perkFactor × workshopFactor`.
 - **Enemy Degrade Chance** works like the classic "skip a level" upgrade in reverse: each spawning enemy has the shown chance to be built with the stats (HP, damage, speed, veteran traits) of a wave **1..N waves lower**, N = `1 + l/10` (6 at max). Coin and cash rewards still use the current wave. Bosses are never degraded.
-- **Damage order on the tower:** Defense % → Defense Absolute (at least 10% of the hit always gets through) → Thorns reflect (% of the raw hit) → the Wall absorbs → Death Defy (lethal hit: survive at 1% HP) → Health.
-- **Wall:** with Wall Health > 0, a steel bar sits just above the tower. Contact enemies stop at it and it absorbs all damage (contact and ranged) until it falls; it regenerates slowly and rebuilds after Wall Rebuild seconds.
+- **Damage order on the tower:** Barrier → Plating (at least 10% of the hit always gets through) → Counterfire reflect (% of the raw hit) → Fortification absorbs → Last Stand (lethal hit: survive at 1% HP, "LAST STAND" popup) → Hull Integrity.
+- **Fortification:** with Fortification > 0, a steel bar sits just above the tower. Contact enemies stop at it and it absorbs all damage (contact and ranged) until it falls; it regenerates slowly and rebuilds after Reconstruction seconds.
 - **Recovery:** after each wave the tower heals `min(Recovery Amount, Max Recovery) × max HP`.
 - **Interest:** after each wave you get `min(cash × Interest, 40 × that wave's base cash)`.
-- Rendering stays cheap: orbs are small circles, mines are small crosses, the wall is a bar and the shockwave is an expanding ring (only tower-side effects are round; no mob is a circle).
+- Rendering stays cheap: Satellites are small circles, Charges are small crosses, the Fortification is a bar and the Pulse is an expanding ring (only tower-side effects are round; no mob is a circle).
+
+- **Attack Speed** is `1 + 0.039 × l`, reaching **40 shots/s at L1000** (the old 12/s cap is gone). Research can push the tower to at most 60/s. The fixed 1/60 s simulation fires several shots per step when needed (up to 4 per step = 240/s with Rapid Fire's ×3 burst), so Light Speed, Rapid Fire and Multishot keep working at 40/s+.
+- **Hull Integrity** (max health) is shaped like The Tower's Health curve: `12 × (1 + l/10)^3 × exp(1.13 × max(0, (l − 7000)/1000)^2)`. Relative per-level gains shrink slowly through the middle and steepen again past L7000. Values: L0 12 · L1000 ~1.24e7 · L3000 ~3.27e8 · L5000 ~1.51e9 · L7000 ~4.13e9 · L8000 ~1.91e10 · L10000 ~3.1e14. Hull Integrity Research, the Diamond Perk and Enhancement still multiply it.
+- **Core Repair** is a flat HP/s: `0.01 × HullIntegrity(l)` (0 at L0), i.e. 1% of the Hull Integrity value at the same level, multiplied by the same research / perk / Enhancement multipliers as max health, with a **ceiling of 2.8% of current max health per second** (effective regen = `min(flat, 0.028 × maxHP)`; the UI shows `X/s (max 2.8%/s)`). Max level 10,000; old Health Regen levels (≤ 50) carry over 1:1.
+- **Plating** (flat block) is shaped like The Tower's Defense Absolute: `0.6 × l × (1 + l/40)^1.5 × exp(K × max(0, (l − 5000)/1000)^2)`, K ≈ 1.169. Values: L1 0.62 · L1000 ~7.9e4 · L3000 ~1.2e6 · L5000 ~4.2e6 · **L6000 ~2.15e7** · L8000 ~5.1e11 · L10000 ~1.2e20. At least 10% of every hit still gets through.
+- **Early balance:** Hull Integrity starts at 12 instead of 100, so all enemy damage is scaled by 0.12 (`GameEngine.ENEMY_DAMAGE_SCALE`). Counterfire reflects in the old units and Drain heals in the new ones, so both keep their old strength. A fresh tower still reaches wave 11 in the simulation test.
 
 ### ASSAULT (10)
 
 | Upgrade | Effect | Formula at total level `l` | Max | Coin cost (perm L) | Cash cost (run L) | Gate |
 |---|---|---|---|---|---|---|
-| **Damage** | Damage per shot | `10.0 * (1 + 0.25 * l) * 1.012.pow(l)` | 1000 | 25 × 1.14^L | 15 × 1.16^L | — |
-| **Attack Speed** | Shots per second (cap 12/s before research) | `(1.0 + 0.04 * l).coerceAtMost(12.0)` | 275 | 30 × 1.15^L | 20 × 1.18^L | — |
-| **Crit Chance** | Chance for a critical hit (cap 79%) | `(0.01 * l).coerceAtMost(0.79)` | 79 | 60 × 1.18^L | 40 × 1.20^L | wave 5 |
-| **Crit Factor** | Critical damage multiplier | `1.5 + 0.08 * l` | 500 | 50 × 1.16^L | 30 × 1.18^L | wave 5 |
-| **Range** | Targeting distance from the tower (cap 2.4) | `(1.2 + 0.02 * l).coerceAtMost(2.4)` | 60 | 40 × 1.17^L | 25 × 1.20^L | — |
-| **Multishot** | Chance to fire at extra targets (cap 50%, up to +3 targets) | `(0.01 * l).coerceAtMost(0.5)` · secondary `(1 + l / 25).coerceAtMost(3).toDouble()` | 50 | 120 × 1.20^L | 60 × 1.22^L | wave 8 |
-| **Rapid Fire** | Chance per shot to start a 2 s burst of boosted fire rate (cap 25%, x3) | `(0.005 * l).coerceAtMost(0.25)` · secondary `(2.0 + 0.02 * l).coerceAtMost(3.0)` | 50 | 150 × 1.20^L | 70 × 1.22^L | wave 10 |
-| **Bounce Shot** | Chance a hit bounces to nearby enemies (cap 50%, up to 3 bounces) | `(0.01 * l).coerceAtMost(0.5)` · secondary `(1 + l / 20).coerceAtMost(3).toDouble()` | 50 | 180 × 1.20^L | 80 × 1.22^L | wave 12 |
-| **Super Crit** | Chance on a crit to multiply again (cap 40%); stacks with the Diamond Perk | `(0.005 * l).coerceAtMost(0.4)` · secondary `1.5 + 0.05 * l` | 80 | 400 × 1.22^L | 150 × 1.24^L | wave 25 |
-| **Rend Armor** | Each hit shreds armor: that enemy takes more damage (cap +20%/hit, +200% total) | `(0.004 * l).coerceAtMost(0.2)` · secondary `(0.04 * l).coerceAtMost(2.0)` | 50 | 250 × 1.21^L | 100 × 1.23^L | wave 20 |
+| **Damage** | Damage per shot | `10.0 * (1 + 0.25 * l) * 1.012.pow(l)` | 10,000 | 25 × 1.14^L, ×1.008/level after L5000 | 15 × 1.16^L, ×1.03/level after L2500 | — |
+| **Attack Speed** | Shots per second (cap 40/s at L1000) | `(1.0 + 0.039 * l).coerceAtMost(MAX_WORKSHOP_FIRE_RATE)` | 1000 | 30 × 1.15^L, ×1.05/level after L300 | 20 × 1.18^L, ×1.06/level after L300 | — |
+| **Crit Chance** | Chance for a critical hit (cap 90%) | `(0.01 * l).coerceAtMost(0.90)` | 90 | 60 × 1.18^L | 40 × 1.20^L | wave 5 |
+| **Crit Factor** | Critical damage multiplier | `1.5 + 0.08 * l` | 175 | 50 × 1.16^L | 30 × 1.18^L | wave 5 |
+| **Range** | Targeting distance from the tower (cap 2.4 at L90) | `(1.2 + 1.2 * l / 90.0).coerceAtMost(2.4)` | 90 | 40 × 1.17^L | 25 × 1.20^L | — |
+| **Multishot** | Chance to fire at extra targets (cap 50%, up to +3 targets) | `(0.5 * l / 110.0).coerceAtMost(0.5)` · secondary `(1 + 2 * l / 110).coerceAtMost(3).toDouble()` | 110 | 120 × 1.20^L | 60 × 1.22^L | wave 8 |
+| **Rapid Fire** | Chance per shot to start a 2 s burst of boosted fire rate (cap 25%, x3) | `(0.25 * l / 60.0).coerceAtMost(0.25)` · secondary `(2.0 + l / 60.0).coerceAtMost(3.0)` | 60 | 150 × 1.20^L | 70 × 1.22^L | wave 10 |
+| **Bounce Shot** | Chance a hit bounces to nearby enemies (cap 50%, up to 3 bounces) | `(0.5 * l / 60.0).coerceAtMost(0.5)` · secondary `(1 + 2 * l / 60).coerceAtMost(3).toDouble()` | 60 | 180 × 1.20^L | 80 × 1.22^L | wave 12 |
+| **Super Crit** | Chance on a crit to multiply again (cap 40%); stacks with the Diamond Perk | `(0.4 * l / 95.0).coerceAtMost(0.4)` · secondary `1.5 + 0.05 * l` | 95 | 400 × 1.22^L | 150 × 1.24^L | wave 25 |
+| **Rend Armor** | Each hit shreds armor: that enemy takes more damage (cap +20%/hit, +200% total) | `(0.2 * l / 60.0).coerceAtMost(0.2)` · secondary `(2.0 * l / 60.0).coerceAtMost(2.0)` | 60 | 250 × 1.21^L | 100 × 1.23^L | wave 20 |
 
 ### SHIELD (13)
 
 | Upgrade | Effect | Formula at total level `l` | Max | Coin cost (perm L) | Cash cost (run L) | Gate |
 |---|---|---|---|---|---|---|
-| **Health** | Tower max health | `100.0 * (1 + 0.2 * l) * 1.01.pow(l)` | 1000 | 20 × 1.13^L | 15 × 1.15^L | — |
-| **Health Regen** | % of max health regenerated per second (cap 4%/s) | `(0.0008 * l).coerceAtMost(0.04)` | 50 | 30 × 1.15^L | 20 × 1.18^L | — |
-| **Defense %** | Damage reduction (cap 75%) | `0.75 * (1 - 0.985.pow(l))` | 300 | 40 × 1.16^L | 30 × 1.19^L | — |
-| **Defense Absolute** | Flat damage removed from every hit (after Defense %, min 10% of the hit gets through) | `1.5 * l * 1.01.pow(l)` | 500 | 35 × 1.15^L | 25 × 1.18^L | wave 3 |
-| **Thorns** | Reflects % of damage taken back at the attacker (cap 100%) | `(0.02 * l).coerceAtMost(1.0)` | 50 | 80 × 1.18^L | 40 × 1.20^L | wave 6 |
-| **Lifesteal** | % of damage dealt heals the tower (cap 5%) | `(0.001 * l).coerceAtMost(0.05)` | 50 | 150 × 1.20^L | 70 × 1.22^L | wave 10 |
-| **Knockback** | Chance a hit pushes the enemy back up (cap 50%; bosses resist 80%) | `(0.01 * l).coerceAtMost(0.5)` · secondary `(0.02 + 0.0012 * l).coerceAtMost(0.08)` | 50 | 60 × 1.18^L | 35 × 1.20^L | wave 4 |
-| **Orbs** | Orbiting projectiles that damage enemies they touch (up to 4) | `orbCount(l).toDouble()` · secondary `0.5 + 0.05 * l` | 60 | 300 × 1.22^L | 120 × 1.24^L | wave 15 |
-| **Shockwave** | Periodic pulse that damages and pushes back nearby enemies | `if (l == 0) 0.0 else (12.0 - 0.1 * l).coerceAtLeast(4.0)` · secondary `1.0 + 0.2 * l` | 80 | 300 × 1.21^L | 120 × 1.23^L | wave 18 |
-| **Death Defy** | Chance to survive a lethal hit at 1% health (cap 30%) | `(0.005 * l).coerceAtMost(0.3)` | 60 | 500 × 1.24^L | 200 × 1.26^L | wave 25 |
-| **Wall Health** | A wall above the tower that blocks contact and absorbs damage first (up to 200% of max health) | `(0.05 * l).coerceAtMost(2.0)` | 40 | 150 × 1.19^L | 60 × 1.21^L | wave 12 |
-| **Wall Rebuild** | Wall regenerates and rebuilds faster after it falls (min 8 s) | `(30.0 - 0.4 * l).coerceAtLeast(8.0)` · secondary `(0.001 * l).coerceAtMost(0.05)` | 55 | 150 × 1.19^L | 60 × 1.21^L | wave 12 |
-| **Land Mines** | Periodically lays mines in the lane that explode on contact | `if (l == 0) 0.0 else (10.0 - 0.1 * l).coerceAtLeast(2.0)` · secondary `2.0 + 0.3 * l` | 80 | 250 × 1.21^L | 100 × 1.23^L | wave 20 |
+| **Hull Integrity** | Tower max health | `hullIntegrity(l)` | 10,000 | 20 × 1.13^L, ×1.008/level after L5000 | 15 × 1.15^L, ×1.03/level after L2500 | — |
+| **Core Repair** | Restores hull per second: 1% of the Hull Integrity value at the same level (ceiling 2.8% of max health/s) | `0.01 × hullIntegrity(l)` HP/s (0 at L0), effective `min(that, 0.028 × maxHP)` | 10,000 | 30 × 1.15^L, ×1.008/level after L4500 | 20 × 1.18^L, ×1.03/level after L2500 | — |
+| **Barrier** | Damage reduction (cap 75%) | `0.75 * (1 - 0.985.pow(l))` | 300 | 40 × 1.16^L | 30 × 1.19^L | — |
+| **Plating** | Flat damage removed from every hit (after Barrier, min 10% of the hit gets through) | `plating(l)` | 10,000 | 35 × 1.15^L, ×1.008/level after L4500 | 25 × 1.18^L, ×1.03/level after L2500 | wave 3 |
+| **Counterfire** | Reflects % of damage taken back at the attacker (cap 100%) | `(0.02 * l).coerceAtMost(1.0)` | 50 | 80 × 1.18^L | 40 × 1.20^L | wave 6 |
+| **Drain** | % of damage dealt heals the tower (cap 5%) | `(0.001 * l).coerceAtMost(0.05)` | 50 | 150 × 1.20^L | 70 × 1.22^L | wave 10 |
+| **Repulse** | Chance a hit pushes the enemy back up (cap 50%; bosses resist 80%) | `(0.01 * l).coerceAtMost(0.5)` · secondary `(0.02 + 0.0012 * l).coerceAtMost(0.08)` | 50 | 60 × 1.18^L | 35 × 1.20^L | wave 4 |
+| **Satellites** | Orbiting projectiles that damage enemies they touch (up to 4) | `orbCount(l).toDouble()` · secondary `0.5 + 0.05 * l` | 60 | 300 × 1.22^L | 120 × 1.24^L | wave 15 |
+| **Pulse** | Periodic pulse that damages and pushes back nearby enemies | `if (l == 0) 0.0 else (12.0 - 0.1 * l).coerceAtLeast(4.0)` · secondary `1.0 + 0.2 * l` | 80 | 300 × 1.21^L | 120 × 1.23^L | wave 18 |
+| **Last Stand** | Chance to survive a lethal hit at 1% health (cap 30%) | `(0.005 * l).coerceAtMost(0.3)` | 60 | 500 × 1.24^L | 200 × 1.26^L | wave 25 |
+| **Fortification** | A fortification above the tower that blocks contact and absorbs damage first (up to 200% of max health) | `(0.05 * l).coerceAtMost(2.0)` | 40 | 150 × 1.19^L | 60 × 1.21^L | wave 12 |
+| **Reconstruction** | Fortification regenerates, and rebuilds faster after it falls (min 8 s) | `(30.0 - 0.4 * l).coerceAtLeast(8.0)` · secondary `(0.001 * l).coerceAtMost(0.05)` | 55 | 150 × 1.19^L | 60 × 1.21^L | wave 12 |
+| **Charges** | Periodically lays charges in the lane that explode on contact | `if (l == 0) 0.0 else (10.0 - 0.1 * l).coerceAtLeast(2.0)` · secondary `2.0 + 0.3 * l` | 80 | 250 × 1.21^L | 100 × 1.23^L | wave 20 |
 
-### LEDGER (9)
+### LEDGER (8)
 
 | Upgrade | Effect | Formula at total level `l` | Max | Coin cost (perm L) | Cash cost (run L) | Gate |
 |---|---|---|---|---|---|---|
@@ -265,7 +271,8 @@ The Workshop is split into three tabs, the same way in the main menu and in the 
 | **Recovery Amount** | Heals % of max health at the end of each wave (cap 50%) | `(0.01 * l).coerceAtMost(0.5)` | 50 | 80 × 1.17^L | 40 × 1.20^L | wave 3 |
 | **Max Recovery** | Cap on the per-wave heal, % of max health (10% -> 100%) | `(0.10 + 0.01 * l).coerceAtMost(1.0)` | 90 | 80 × 1.17^L | 40 × 1.20^L | wave 3 |
 
-Saves from 1.1.0 (save v2) are migrated to save v3: Attack → Damage, Attack Speed, Crit Chance, Crit Factor and Health keep their names, Defense → Defense %. Levels are clamped to the new max levels; unknown keys are dropped.
+Saves from 1.1.0 (save v2) are migrated to save v3: Attack → Damage, Attack Speed, Crit Chance, Crit Factor keep their names, Health → Hull Integrity, Defense → Barrier.
+Save v4 renames the Shield keys (HEALTH → HULL_INTEGRITY, HEALTH_REGEN → CORE_REPAIR, DEFENSE_PCT → BARRIER, DEFENSE_ABS → PLATING, THORNS → COUNTERFIRE, LIFESTEAL → DRAIN, KNOCKBACK → REPULSE, ORBS → SATELLITES, SHOCKWAVE → PULSE, DEATH_DEFY → LAST_STAND, WALL_HEALTH → FORTIFICATION, WALL_REBUILD → RECONSTRUCTION, LAND_MINES → CHARGES). On every load, workshop levels are clamped to the current max levels (e.g. Crit Factor 500 → 175) and unknown keys are dropped.
 
 ## Stages
 
@@ -320,13 +327,16 @@ Before each cap bump, re-check the cost curve (`Enhancement.cost`) against the c
 - the enemy pool per Enhancement level at the boundaries 0/1/1000/1001/3000/3001/5000/5001, Spiral never in the pool, the engine honouring the pool, veteran traits, and finite HP at stage 24's last wave
 - the Spiral Boss being bigger than the largest normal mob (any size tier), slower and tankier, and its reward going into the banked coins
 - stages: table shape, Stage 2 unlocking after clearing 500, Stage 1 completing at 10,000, milestones paid once along the way, stage multipliers
-- save migration v1 → v2, v2 → v3 (old six workshop stats into the new tabs, clamping) and v1 → v3
+- save migration v1 → v2, v2 → v3 (old six workshop stats into the new tabs), v3 → v4 (Shield renames, clamping to new max levels), clamp-on-load and v1 → current
 - Workshop tabs: exactly the listed upgrades per tab (LEDGER exactly 9), no retired labels, cost curves monotonic and finite to max level, caps
 - permanent + in-run levels stacking, gates and max level in-run, permanent coin purchases
 - Free Assault/Shield/Ledger chance applied (and only to its own tab)
 - Enemy Degrade lowering the stat wave (and HP) while rewards stay at the current wave
 - Bounty in the coin pipeline and Tribute in the cash pipeline
-- Death Defy (0 at L0, ~30% at max, leaves 1% HP), the Wall absorbing damage before the tower, Defense Absolute floor and Thorns, Max Recovery capping Recovery
+- Last Stand (0 at L0, ~30% at max, leaves 1% HP), the Fortification absorbing damage before the tower, Plating floor and Counterfire, Max Recovery capping Recovery
+- Assault max levels and caps (Damage 10,000, Attack Speed 1000 = 40/s, Crit Chance 90 = 90%, Crit Factor 175, Range 90 = 2.4, Multishot 110, Rapid Fire / Bounce / Rend 60, Super Crit 95), exact cost curves below the softening thresholds, several shots per step at 40/s
+- Hull Integrity (12 at L0, slow middle, steeper past L7000), Core Repair (= 1% of Hull Integrity at the same level, scaled by research, capped at 2.8% of max HP/s in stats and in the engine) and Plating (~2.15e7 at L6000) curves: monotonic, finite to L10,000, finite costs
+- no retired Shield label in any upgrade label, description, value text or research name
 - number formatting (K/M/B/T/aa…/zz, rounding edges, ∞)
 - boss reward scaling
 - 20 shapes with no forbidden ones, combo counts (≥ 2,000 base, ≥ 5,000 with extras) and tier ranking

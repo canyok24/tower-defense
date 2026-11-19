@@ -53,7 +53,7 @@ object Enhancement {
 // =====================================================================  Diamond perks
 enum class DiamondPerk(val label: String, val description: String, val maxLevel: Int) {
     MULT_DAMAGE("Damage Multiplier", "x1.08 damage per level (compounding)", 60),
-    MULT_HEALTH("Health Multiplier", "x1.08 health per level (compounding)", 60),
+    MULT_HEALTH("Hull Integrity Multiplier", "x1.08 hull integrity (max health) per level (compounding)", 60),
     MULT_CRIT_RATE("Crit Rate Multiplier", "+4% of crit chance per level", 25),
     CRIT_FACTOR("Critical Factor", "+0.15 crit factor per level", 50),
     ADV_CRIT_RATE("Advanced Crit Rate", "+0.5% flat crit chance per level", 40),
