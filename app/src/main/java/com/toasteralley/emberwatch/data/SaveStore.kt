@@ -71,7 +71,7 @@ class SaveStore(context: Context) {
             return if (from < SaveData.CURRENT_VERSION) SaveMigrations.migrate(d, from,
                 LegacyFields(unlockedTier = j.optInt("unlockedTier", 1), selectedTier = j.optInt("selectedTier", 1),
                     coins = if (j.has("coins")) j.optDouble("coins", 0.0).takeUnless { it.isNaN() } else null))
-            else SaveMigrations.clampWorkshop(d)
+            else SaveMigrations.normalize(d)
         }
 
         private fun readFields(j: JSONObject): SaveData = SaveData().apply {

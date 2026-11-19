@@ -62,7 +62,7 @@ class EnemyPoolTest {
         // HP keeps scaling and stays finite for every stage's full-reward wave
         assertTrue(WaveRules.hpScale(1000) > WaveRules.hpScale(500) * 100)
         val maxWave = StageDefinitions.ALL.maxOf { it.fullRewardWave }
-        assertTrue((WaveRules.hpScale(maxWave) * StageDefinitions.get(24).hpMult * 60).isFinite())
-        assertTrue((WaveRules.damageScale(maxWave) * StageDefinitions.get(24).damageMult * 25).isFinite())
+        assertTrue((WaveRules.hpScale(maxWave) * StageDefinitions.get(StageDefinitions.STAGE_COUNT).hpMult * 60).isFinite())
+        assertTrue((WaveRules.damageScale(maxWave) * StageDefinitions.get(StageDefinitions.STAGE_COUNT).damageMult * 25).isFinite())
     }
 }

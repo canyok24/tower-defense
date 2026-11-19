@@ -7,12 +7,19 @@ import org.junit.Test
 
 class StageTest {
     @Test fun tableShape() {
-        assertEquals(24, StageDefinitions.ALL.size)
+        assertEquals(5, StageDefinitions.ALL.size)
+        assertEquals(5, StageDefinitions.STAGE_COUNT)
+        assertEquals(listOf(0, 500, 600, 650, 750), StageDefinitions.ALL.map { it.unlockWave })
+        assertEquals(listOf(10_000, 12_500, 15_000, 17_500, 20_000), StageDefinitions.ALL.map { it.fullRewardWave })
+        for (d in StageDefinitions.ALL) {
+            assertEquals(Math.pow(2.2, d.number - 1.0), d.bountyMult, 1e-9); assertEquals(Math.pow(4.0, d.number - 1.0), d.hpMult, 1e-9)
+            assertEquals(Math.pow(3.0, d.number - 1.0), d.damageMult, 1e-9); assertEquals(1 + 0.03 * (d.number - 1), d.speedMult, 1e-9)
+        }
         val s1 = StageDefinitions.get(1); val s2 = StageDefinitions.get(2)
         assertEquals(10_000, s1.fullRewardWave)
         assertEquals(500, s2.unlockWave)
         assertEquals(10_000, s1.milestones.last().wave)
-        for (i in 1 until 24) {
+        for (i in 1 until StageDefinitions.STAGE_COUNT) {
             val a = StageDefinitions.ALL[i - 1]; val b = StageDefinitions.ALL[i]
             assertTrue(b.unlockWave >= a.unlockWave)
             assertTrue(b.fullRewardWave > a.fullRewardWave)
@@ -31,8 +38,8 @@ class StageTest {
         RunRewards.applyRunEnd(s, waveReached = 501, stage = 1)  // cleared 500
         assertTrue(Stages.isUnlocked(s, 2)); assertFalse(Stages.isUnlocked(s, 3))
         assertEquals(2, Stages.highestUnlocked(s))
-        assertTrue(Stages.isUnlocked(s, 24, bypass = true))
-        assertEquals(24, Stages.highestUnlocked(s, bypass = true))
+        assertTrue(Stages.isUnlocked(s, 5, bypass = true)); assertFalse(Stages.isUnlocked(s, 6, bypass = true))
+        assertEquals(5, Stages.highestUnlocked(s, bypass = true))
     }
 
     @Test fun stage1RewardsCompleteAt10000() {
@@ -70,5 +77,15 @@ class StageTest {
         assertTrue(m5.speed > m1.speed)
         val s = SaveData().apply { selectedStage = 5 }
         assertEquals(StageDefinitions.get(5).bountyMult, BountyMultipliers.total(s, emptySet(), 0), 1e-9)
+    }
+
+    @Test fun savesAboveFiveClampToFive() {
+        val s = SaveData().apply { selectedStage = 17; legacyUnlockedStage = 24 }
+        SaveMigrations.normalize(s)
+        assertEquals(5, s.selectedStage); assertEquals(5, s.legacyUnlockedStage)
+        assertEquals(5, Stages.highestUnlocked(s))
+        assertEquals(5, StageDefinitions.get(24).number)
+        val v1 = SaveMigrations.migrate(SaveData().apply { version = 1 }, 1, LegacyFields(unlockedTier = 9, selectedTier = 8))
+        assertEquals(5, v1.selectedStage); assertEquals(5, v1.legacyUnlockedStage)
     }
 }

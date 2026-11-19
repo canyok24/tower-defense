@@ -14,7 +14,7 @@ Package: `com.toasteralley.emberwatch` · minSdk 24 · target/compile SDK 35 · 
 - **Spiral Boss every 10 waves.** It's the biggest mob in the game: radius 0.11 of the screen width, against 0.0625 for the largest normal mob (a LARGE yin-yang). It's also the slowest, has 60x base HP (growing a further +1% per wave) and a shield, and hits hard at the wall. Its Bounty reward is `50 × (wave ÷ 10)`, times the full Bounty multiplier. That Bounty is banked into the same balance that pays for Workshop upgrades and Research Bay projects. Killing it also drops Diamonds and Research Cores. The Spiral is never part of the normal-mob pool.
 - During a run you earn **Cash** and spend it on run-only upgrades (ATK / RATE / HP). Cash resets every run.
 - Speed button: 1x / 2x / 3x / 5x. The simulation always uses fixed 1/60 s steps, and higher speeds just run more steps per frame.
-- **24 Stages**, chosen on the main menu. Each stage raises mob HP, damage and speed, pays a bigger Bounty multiplier, keeps its own best wave, and has its own milestone reward table. See [Stages](#stages).
+- **5 Stages** (24 planned for a later update), chosen on the main menu. Each stage raises mob HP, damage and speed, pays a bigger Bounty multiplier, keeps its own best wave, and has its own milestone reward table. See [Stages](#stages).
 
 **Mobs: simple shapes, difficulty comes from behaviour**
 - There are 20 shapes, each a cached unit-size `Path`: pentagon, hexagon, heptagon, octagon, nonagon, decagon, star, crescent, cross, arrowhead, chevron, parallelogram, trapezoid, ellipse, rounded rectangle, ring, heart, clover, yin-yang and spiral. Circle, square, triangle and diamond are never used, and a unit test enforces this.
@@ -193,7 +193,7 @@ A hidden developer/admin menu for testing progression without grinding.
 - **Main menu:** press and hold the gear icon (top right) for **at least 2 seconds** and release. Then, within 10 seconds, tap the **EMBERWATCH** title **5 times within 3 seconds**.
 - **In a run:** hold the **II** (pause) button for 2 seconds and release. Then tap the **WAVE** label at top left 5 times within 3 seconds.
 
-**Main-menu override:** bypass all progression gates (menus, research gates, stages); unlock all 24 stages (access only, no rewards); **set the Enhancement level to anything from 0 to 100,000, even above the cap**, to test the enemy pools (for example 1500 adds dangerous shapes, 6000 adds everything); set the selected stage's best cleared wave (this pays its milestones); max all research or unlock only Light Speed Shots; unlock all Ultimate Weapons; max all Diamond Perks; complete running research timers now; set Bounty, Diamonds, Research Cores and best wave; start the next run at wave N; god mode; locally grant or revoke any store pack (not a real purchase).
+**Main-menu override:** bypass all progression gates (menus, research gates, stages); unlock all 5 stages (access only, no rewards); **set the Enhancement level to anything from 0 to 100,000, even above the cap**, to test the enemy pools (for example 1500 adds dangerous shapes, 6000 adds everything); set the selected stage's best cleared wave (this pays its milestones); max all research or unlock only Light Speed Shots; unlock all Ultimate Weapons; max all Diamond Perks; complete running research timers now; set Bounty, Diamonds, Research Cores and best wave; start the next run at wave N; god mode; locally grant or revoke any store pack (not a real purchase).
 
 **Workshop override (main menu):** set any upgrade in any tab to any level (0..max), max one tab, max all three tabs, or reset the workshop.
 
@@ -278,16 +278,18 @@ Save v4 renames the Shield keys (HEALTH → HULL_INTEGRITY, HEALTH_REGEN → COR
 
 All stage tuning lives in **`app/src/main/java/com/toasteralley/emberwatch/core/StageDefinitions.kt`**. These are the formulas behind the table:
 
-| | Formula | Stage 1 | Stage 2 | Stage 12 | Stage 24 |
-|---|---|---|---|---|---|
-| Unlock (waves cleared in previous stage) | 500 × 1.15^(n−2), rounded to 50 | — | 500 | 2,000 | 10,800 |
-| Full rewards at wave | 10,000 + 2,500 × (n−1) | 10,000 | 12,500 | 37,500 | 67,500 |
-| Mob HP | 4^(n−1) | ×1 | ×4 | ×4.2M | ×7.0e13 |
-| Mob damage | 3^(n−1) | ×1 | ×3 | ×177K | ×9.4e10 |
-| Mob speed | 1 + 0.03 × (n−1) | ×1.00 | ×1.03 | ×1.33 | ×1.69 |
-| Bounty multiplier | 2.2^(n−1) | ×1 | ×2.2 | ×5,840 | ×7.5e7 |
+The initial build ships **5 stages** (`StageDefinitions.STAGE_COUNT = 5`). **24 stages are planned for a later update**; the formulas below already cover them, so the update only raises the constant.
 
-All unlock requirements, stages 2–24: 500, 600, 650, 750, 850, 1000, 1150, 1350, 1550, 1750, 2000, 2350, 2700, 3100, 3550, 4050, 4700, 5400, 6200, 7100, 8200, 9400, 10800.
+| | Formula | Stage 1 | Stage 2 | Stage 3 | Stage 4 | Stage 5 |
+|---|---|---|---|---|---|---|
+| Unlock (waves cleared in previous stage) | 500 × 1.15^(n−2), rounded to 50 | — | 500 | 600 | 650 | 750 |
+| Full rewards at wave | 10,000 + 2,500 × (n−1) | 10,000 | 12,500 | 15,000 | 17,500 | 20,000 |
+| Mob HP | 4^(n−1) | ×1 | ×4 | ×16 | ×64 | ×256 |
+| Mob damage | 3^(n−1) | ×1 | ×3 | ×9 | ×27 | ×81 |
+| Mob speed | 1 + 0.03 × (n−1) | ×1.00 | ×1.03 | ×1.06 | ×1.09 | ×1.12 |
+| Bounty multiplier | 2.2^(n−1) | ×1 | ×2.2 | ×4.84 | ×10.6 | ×23.4 |
+
+Saves that selected or unlocked a stage above 5 (from the 24-stage 1.2.0 build) are clamped to Stage 5 on load; per-stage progress above 5 is kept for the later update.
 
 **Milestone rewards (per stage).** There are 11 milestones per stage, at these fractions of the stage's full-reward wave: 0.1%, 0.25%, 0.5%, 1%, 2.5%, 5%, 10%, 25%, 50%, 75% and 100%. For Stage 1 that's waves 10, 25, 50, 100, 250, 500, 1,000, 2,500, 5,000, 7,500 and **10,000**. The 10,000 milestone completes every Stage 1 reward.
 
@@ -297,8 +299,8 @@ All unlock requirements, stages 2–24: 500, 600, 650, 750, 850, 1000, 1150, 135
 | Research Cores (Stage 1) | 2 | 4 | 6 | 10 | 20 | 35 | 50 | 80 | 120 | 160 | 300 |
 | Permanent Bounty bonus | – | – | – | +1% | +1% | +1% | +2% | +2% | +2% | +2% | +3% |
 
-- Diamond and core rewards scale by ×(1 + 0.5 × (n−1)) per stage, so Stage 24 pays 12.5x.
-- Bounty bonuses are permanent, multiply together and apply on every stage. That's ×1.144 per completed stage and about ×25 if you complete all 24.
+- Diamond and core rewards scale by ×(1 + 0.5 × (n−1)) per stage, so Stage 5 pays 3x.
+- Bounty bonuses are permanent, multiply together and apply on every stage. That's ×1.144 per completed stage and about ×1.96 if you complete all 5.
 - Rewards are paid in order, once each, when a run ends: the stage records waves *cleared* (the wave you were on when the wall fell doesn't count).
 - The menu gates (Workshop crit at wave 5, Perks 15, UW 20, Enhancement 30, research gates) still use your best wave reached on any stage.
 
@@ -326,7 +328,7 @@ Before each cap bump, re-check the cost curve (`Enhancement.cost`) against the B
 - the Enhancement formula (2.0 at L10, 100 at L1000, monotonic, milestone jumps), the cap of 1,000, and a cost curve that stays finite and increasing through L6000
 - the enemy pool per Enhancement level at the boundaries 0/1/1000/1001/3000/3001/5000/5001, Spiral never in the pool, the engine honouring the pool, veteran traits, and finite HP at stage 24's last wave
 - the Spiral Boss being bigger than the largest normal mob (any size tier), slower and tankier, and its reward going into the banked Bounty
-- stages: table shape, Stage 2 unlocking after clearing 500, Stage 1 completing at 10,000, milestones paid once along the way, stage multipliers
+- stages: exactly 5 stages with the formula values, saves above Stage 5 clamping to 5, Stage 2 unlocking after clearing 500, Stage 1 completing at 10,000, milestones paid once along the way, stage multipliers
 - save migration v1 → v2, v2 → v3 (old six workshop stats into the new tabs), v3 → v4 (Shield renames, clamping to new max levels), clamp-on-load and v1 → current
 - Workshop tabs: exactly the listed upgrades per tab (LEDGER exactly 9), no retired labels, cost curves monotonic and finite to max level, caps
 - permanent + in-run levels stacking, gates and max level in-run, permanent Bounty purchases

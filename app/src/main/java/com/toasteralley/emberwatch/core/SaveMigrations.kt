@@ -38,6 +38,16 @@ object SaveMigrations {
      * (not only on a version bump) so a rebalance that lowers a max level (e.g. Crit Factor 500 -> 175)
      * clamps saves written by earlier builds of the same save version.
      */
+    /** Clamp stage selection / legacy unlocks to the stages in this build (5). Runs on every load. */
+    fun clampStages(save: SaveData): SaveData {
+        save.selectedStage = save.selectedStage.coerceIn(1, StageDefinitions.STAGE_COUNT)
+        save.legacyUnlockedStage = save.legacyUnlockedStage.coerceIn(1, StageDefinitions.STAGE_COUNT)
+        return save
+    }
+
+    /** Everything that must hold for any loaded save, whatever its version. */
+    fun normalize(save: SaveData): SaveData = clampStages(clampWorkshop(save))
+
     fun clampWorkshop(save: SaveData): SaveData {
         for (key in save.workshop.keys.toList()) {
             val u = Upgrade.entries.firstOrNull { it.name == key }
@@ -83,7 +93,7 @@ object SaveMigrations {
             save.research.remove("COIN_BONUS")?.let { save.research[ResearchProject.BOUNTY_BONUS.name] = maxOf(save.research[ResearchProject.BOUNTY_BONUS.name] ?: 0, it) }
             v = 5
         }
-        clampWorkshop(save)
+        normalize(save)
         save.version = SaveData.CURRENT_VERSION
         return save
     }

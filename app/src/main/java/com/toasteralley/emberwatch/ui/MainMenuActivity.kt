@@ -99,7 +99,7 @@ class MainMenuActivity : AppCompatActivity() {
             "Bounty multiplier x${NumberFormat.compact(app.displayBountyMultiplier(now))}" + if (boostLeft > 0) " (boost ${NumberFormat.duration(boostLeft)})" else "",
             13f, Palette.TEXT_DIM).apply { gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(12)) })
 
-        // stage selector (Stages 1-24, see core/StageDefinitions.kt)
+        // stage selector (Stages 1-5, see core/StageDefinitions.kt)
         val maxStage = Stages.highestUnlocked(save, app.bypassGates)
         save.selectedStage = save.selectedStage.coerceIn(1, maxStage)
         val st = save.selectedStage

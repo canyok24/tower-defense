@@ -15,7 +15,7 @@ class SaveData {
     var cores: Long = 0
     var bestWave: Int = 0
     var totalRuns: Int = 0
-    /** Stage chosen on the main menu (1..24). */
+    /** Stage chosen on the main menu (1..StageDefinitions.STAGE_COUNT = 5). */
     var selectedStage: Int = 1
     /** Best waves CLEARED per stage (key = stage number). */
     val stageBestWave: MutableMap<Int, Int> = mutableMapOf()

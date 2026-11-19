@@ -14,7 +14,7 @@ data class StageReward(
 data class StageMilestone(val wave: Int, val reward: StageReward)
 
 /**
- * One of the 24 stages (replaces the old 10 difficulty tiers).
+ * One of the stages (5 in the initial build; 24 are planned for a later update).
  * @param unlockWave wave that must be cleared in the PREVIOUS stage to unlock this one (0 for Stage 1)
  * @param fullRewardWave waves cleared at which every reward of this stage has been earned
  */
@@ -32,20 +32,26 @@ data class StageDef(
 /**
  * THE stage table. All stage tuning lives here.
  *
- *  unlockWave(n)     = 500 x 1.15^(n-2), rounded to 50       (stage 2: 500 ... stage 24: ~10,800)
- *  fullRewardWave(n) = 10,000 + 2,500 x (n-1)                (stage 1: 10,000 ... stage 24: 67,500)
+ *  unlockWave(n)     = 500 x 1.15^(n-2), rounded to 50       (stage 2: 500, 3: 600, 4: 650, 5: 750)
+ *  fullRewardWave(n) = 10,000 + 2,500 x (n-1)                (stage 1: 10,000 ... stage 5: 20,000)
  *  hpMult(n)         = 4^(n-1)       damageMult(n) = 3^(n-1)
- *  speedMult(n)      = 1 + 0.03 x (n-1)                      (stage 24: x1.69)
- *  bountyMult(n)       = 2.2^(n-1)                             (stage 24: ~7.4e7)
+ *  speedMult(n)      = 1 + 0.03 x (n-1)                      (stage 5: x1.12)
+ *  bountyMult(n)       = 2.2^(n-1)                             (stage 5: ~23.4)
  *
  * Milestones: 11 per stage at these fractions of fullRewardWave
  *   (10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 7500, 10000) / 10,000
  * i.e. Stage 1 pays at waves 10, 25, 50, ... 10,000; the last one completes the stage.
  * Rewards scale by (1 + 0.5 x (n-1)) per stage; bounty bonuses are the same each stage
- * (+14.4% per fully completed stage, ~x25 across all 24).
+ * (+14.4% per fully completed stage, ~x1.96 across all 5).
  */
 object StageDefinitions {
-    const val STAGE_COUNT = 24
+    /**
+     * Initial build ships 5 stages. 24 stages are planned for a later update: raising this constant is
+     * all that is needed (same formulas); saves keep per-stage progress for stages above the count.
+     */
+    const val STAGE_COUNT = 5
+    /** Planned stage count for a later update (documentation only). */
+    const val PLANNED_STAGE_COUNT = 24
     const val STAGE_1_FULL_REWARD_WAVE = 10_000
     const val STAGE_2_UNLOCK_WAVE = 500
 
