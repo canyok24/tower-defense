@@ -24,8 +24,16 @@ class EnhancementTest {
     }
 
     @Test fun capAndCost() {
-        assertEquals(100, Enhancement.ENHANCEMENT_CAP)
-        assertTrue(Enhancement.cost(99) > 1e8) // very expensive at the cap
-        for (l in 0 until 100) assertTrue(Enhancement.cost(l + 1) > Enhancement.cost(l))
+        assertEquals(1000, Enhancement.ENHANCEMENT_CAP)
+        assertEquals(25_000.0 * Math.pow(1.09, 99.0), Enhancement.cost(99), 1.0)
+        for (l in 0 until 6000) {
+            val c = Enhancement.cost(l)
+            assertTrue("L$l finite", c.isFinite())
+            assertTrue("L$l increasing", Enhancement.cost(l + 1) > c)
+        }
+        // steep: every 100 levels past the knee costs ~31x more
+        assertEquals(Math.pow(1.035, 100.0), Enhancement.cost(600) / Enhancement.cost(500), 1e-6)
+        assertTrue(Enhancement.cost(999) in 1e21..1e22)
+        assertTrue(Enhancement.multiplier(Enhancement.ENHANCEMENT_CAP) in 99.99..100.01)
     }
 }

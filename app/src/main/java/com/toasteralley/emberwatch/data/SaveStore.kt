@@ -3,6 +3,8 @@ package com.toasteralley.emberwatch.data
 import android.content.Context
 import android.util.Log
 import com.toasteralley.emberwatch.core.ActiveResearch
+import com.toasteralley.emberwatch.core.LegacyFields
+import com.toasteralley.emberwatch.core.SaveMigrations
 import com.toasteralley.emberwatch.core.ResearchProject
 import com.toasteralley.emberwatch.core.SaveData
 import org.json.JSONArray
@@ -34,8 +36,9 @@ class SaveStore(context: Context) {
             put("version", SaveData.CURRENT_VERSION)
             put("coins", d.coins); put("diamonds", d.diamonds); put("cores", d.cores)
             put("bestWave", d.bestWave); put("totalRuns", d.totalRuns)
-            put("unlockedTier", d.unlockedTier); put("selectedTier", d.selectedTier)
-            put("milestoneRewardedWave", d.milestoneRewardedWave)
+            put("selectedStage", d.selectedStage); put("legacyUnlockedStage", d.legacyUnlockedStage)
+            put("stageBestWave", JSONObject(d.stageBestWave.mapKeys { it.key.toString() } as Map<*, *>))
+            put("stageMilestonesClaimed", JSONObject(d.stageMilestonesClaimed.mapKeys { it.key.toString() } as Map<*, *>))
             put("workshop", JSONObject(d.workshop as Map<*, *>))
             put("perks", JSONObject(d.perks as Map<*, *>))
             put("ultimates", JSONObject(d.ultimates as Map<*, *>))
@@ -57,14 +60,26 @@ class SaveStore(context: Context) {
             o.keys().forEach { into[it] = o.optInt(it) }
         }
 
-        fun fromJson(j: JSONObject): SaveData = SaveData().apply {
+        private fun JSONObject.stageMap(key: String, into: MutableMap<Int, Int>) {
+            val o = optJSONObject(key) ?: return
+            o.keys().forEach { k -> k.toIntOrNull()?.let { into[it] = o.optInt(k) } }
+        }
+
+        fun fromJson(j: JSONObject): SaveData {
+            val d = readFields(j)
+            val from = j.optInt("version", 1)
+            return if (from < SaveData.CURRENT_VERSION) SaveMigrations.migrate(d, from,
+                LegacyFields(unlockedTier = j.optInt("unlockedTier", 1), selectedTier = j.optInt("selectedTier", 1)))
+            else d
+        }
+
+        private fun readFields(j: JSONObject): SaveData = SaveData().apply {
             version = j.optInt("version", 1)
-            // Migrations by version go here (none yet; v1 is the first format).
             coins = j.optDouble("coins", 0.0).let { if (it.isNaN()) 0.0 else it }
             diamonds = j.optLong("diamonds"); cores = j.optLong("cores")
             bestWave = j.optInt("bestWave"); totalRuns = j.optInt("totalRuns")
-            unlockedTier = j.optInt("unlockedTier", 1); selectedTier = j.optInt("selectedTier", 1)
-            milestoneRewardedWave = j.optInt("milestoneRewardedWave")
+            selectedStage = j.optInt("selectedStage", 1); legacyUnlockedStage = j.optInt("legacyUnlockedStage", 1)
+            j.stageMap("stageBestWave", stageBestWave); j.stageMap("stageMilestonesClaimed", stageMilestonesClaimed)
             j.intMap("workshop", workshop); j.intMap("perks", perks)
             j.intMap("ultimates", ultimates); j.intMap("research", research)
             enhancement = j.optInt("enhancement")

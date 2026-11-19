@@ -2,6 +2,7 @@ package com.toasteralley.emberwatch.core
 
 import kotlin.math.floor
 import kotlin.math.ln
+import kotlin.math.log10
 import kotlin.math.pow
 
 // =====================================================================  Enhancement
@@ -21,10 +22,11 @@ import kotlin.math.pow
 object Enhancement {
     /**
      * Current max level. Staged releases raise this constant only:
-     * 100 -> 200 -> 300 -> 400 -> ... toward 100,000 via periodic updates.
-     * The formula is defined for any level, so raising the cap needs no migration.
+     * 1000 (now) -> 2000 -> 3000 -> ... toward 100,000 via periodic updates.
+     * The formula (and EnemyPool thresholds) are defined for any level, so raising
+     * the cap needs no migration.
      */
-    const val ENHANCEMENT_CAP = 100
+    const val ENHANCEMENT_CAP = 1000
     const val MILESTONE_EVERY = 50
     const val MILESTONE_FACTOR = 1.05
     val EXPONENT: Double = ln(50.0 / MILESTONE_FACTOR.pow(20)) / ln(100.0)
@@ -36,8 +38,16 @@ object Enhancement {
 
     fun multiplier(level: Int): Double = base(level) * milestoneBonus(level)
 
-    /** Coins to buy level [level] + 1. Very expensive by design. */
-    fun cost(level: Int): Double = 25_000.0 * 1.09.pow(level)
+    /**
+     * Coins to buy level [level] + 1. Steep but finite:
+     *   L <  100: 25,000 x 1.09^L                 (L99 ~ 1.27e8)
+     *   L >= 100: cost(100) x 1.035^(L-100)       (L500 ~ 1.3e14, L999 ~ 3.6e21)
+     * Beyond the current cap the 1.035 growth continues (L5000 ~ 4e81), still a finite Double.
+     */
+    fun cost(level: Int): Double =
+        if (level < SOFT_KNEE) 25_000.0 * 1.09.pow(level)
+        else 25_000.0 * 1.09.pow(SOFT_KNEE) * 1.035.pow(level - SOFT_KNEE)
+    const val SOFT_KNEE = 100
 }
 
 // =====================================================================  Workshop
@@ -106,21 +116,13 @@ enum class UltimateWeapon(val label: String, val description: String, val maxLev
     fun chainTargets(level: Int) = 3 + level
 }
 
-// =====================================================================  Gates & tiers
+// =====================================================================  Gates
 object Gates {
     const val CRIT_WAVE = 5
     const val PERKS_WAVE = 15
     const val ULTIMATES_WAVE = 20
     const val ENHANCEMENT_WAVE = 30
-    const val TIER_UNLOCK_WAVE = 50
     fun open(requiredWave: Int, save: SaveData, bypass: Boolean) = bypass || save.bestWave >= requiredWave
-}
-
-object Tiers {
-    const val MAX_TIER = 10
-    fun hpMult(tier: Int) = 3.0.pow(tier - 1)
-    fun damageMult(tier: Int) = 2.5.pow(tier - 1)
-    fun coinMult(tier: Int) = 2.2.pow(tier - 1)
 }
 
 // =====================================================================  Coin multipliers
@@ -143,25 +145,41 @@ object CoinMultipliers {
 
     fun canAddChunk(save: SaveData, nowMs: Long) = save.boostUntilMs - nowMs <= REWARDED_MAX_MS - 60_000
 
-    /** Everything that multiplies coin income: packs x rewarded x research x enhancement x tier. */
+    /**
+     * Everything that multiplies coin income:
+     * packs x rewarded x research x enhancement x selected-stage multiplier x stage milestone bonuses.
+     */
     fun total(save: SaveData, owned: Set<String>, nowMs: Long): Double =
         packs(owned) *
             (if (boostActive(save, nowMs)) REWARDED_FACTOR else 1.0) *
             ResearchProject.COIN_BONUS.effect(save.level(ResearchProject.COIN_BONUS)) *
             Enhancement.multiplier(save.enhancement) *
-            Tiers.coinMult(save.selectedTier)
+            StageDefinitions.get(save.selectedStage).coinMult *
+            Stages.coinBonus(save)
 }
 
 // =====================================================================  Number format
 object NumberFormat {
-    private val suffixes = listOf("", "K", "M", "B", "T", "q", "Q", "s", "S", "O", "N", "D")
+    private val named = listOf("", "K", "M", "B", "T")
+
+    /** Suffix for 1000^[group]: "", K, M, B, T, then aa, ab, ... az, ba, ... zz (1000^5 .. 1000^680). */
+    fun suffix(group: Int): String {
+        if (group < named.size) return named[group]
+        val i = group - named.size
+        if (i >= 26 * 26) return "e${group * 3}"
+        return "${'a' + i / 26}${'a' + i % 26}"
+    }
+
+    /** 999 -> "999", 1.2e6 -> "1.20M", 3.4e15 -> "3.40aa". Handles any finite Double. */
     fun compact(v: Double): String {
         if (v.isNaN()) return "0"
-        if (v < 1000) return if (v < 10 && v != floor(v)) "%.1f".format(v) else "%.0f".format(v)
-        var x = v; var i = 0
-        while (x >= 1000 && i < suffixes.lastIndex) { x /= 1000; i++ }
-        if (x >= 1000) return "%.2e".format(v)
-        return (if (x >= 100) "%.0f" else if (x >= 10) "%.1f" else "%.2f").format(x) + suffixes[i]
+        if (v.isInfinite()) return if (v > 0) "inf" else "-inf"
+        if (v < 0) return "-" + compact(-v)
+        if (v < 999.5) return if (v < 10 && v != floor(v)) "%.1f".format(v) else "%.0f".format(v)
+        var group = floor(log10(v) / 3).toInt()
+        var x = v / 10.0.pow(group * 3)
+        if (x >= 999.5) { x /= 1000; group++ }   // "%.0f" would otherwise print "1000"
+        return (if (x >= 100) "%.0f" else if (x >= 10) "%.1f" else "%.2f").format(x) + suffix(group)
     }
     fun duration(ms: Long): String {
         val s = (ms / 1000).coerceAtLeast(0)

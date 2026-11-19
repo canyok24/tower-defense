@@ -51,19 +51,18 @@ class EconomyTest {
         for (r in RunUpgrade.entries) assertTrue(r.cost(10) > r.cost(0))
     }
 
-    @Test fun milestoneDiamondsPaidOnce() {
-        val s = SaveData()
-        assertEquals(15L, RunRewards.applyRunEnd(s, 34, 1))
-        assertEquals(0L, RunRewards.applyRunEnd(s, 25, 1))
-        assertEquals(5L, RunRewards.applyRunEnd(s, 41, 1))
-        assertEquals(41, s.bestWave)
-        RunRewards.applyRunEnd(s, 50, 1)
-        assertEquals(2, s.unlockedTier)
-    }
-
     @Test fun compactFormat() {
         assertEquals("999", NumberFormat.compact(999.0))
         assertEquals("1.20M", NumberFormat.compact(1_200_000.0))
         assertEquals("3.00M", NumberFormat.compact(3_000_000.0))
+        assertEquals("1.00B", NumberFormat.compact(1e9))
+        assertEquals("1.00T", NumberFormat.compact(1e12))
+        assertEquals("1.00aa", NumberFormat.compact(1e15))
+        assertEquals("2.50ab", NumberFormat.compact(2.5e18))
+        assertEquals("1.00ba", NumberFormat.compact(1e93))     // 1000^31 -> group 26 after T
+        assertEquals("1.00K", NumberFormat.compact(999_999.0 / 1000 * 1.0000001)) // 999.999 rounds up, not "1000"
+        assertEquals("1.00M", NumberFormat.compact(999_999.9))
+        assertTrue(NumberFormat.compact(1.7e308).isNotEmpty())
+        assertEquals("inf", NumberFormat.compact(Double.POSITIVE_INFINITY))
     }
 }

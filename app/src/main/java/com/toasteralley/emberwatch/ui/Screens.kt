@@ -6,6 +6,7 @@ import com.toasteralley.emberwatch.BuildConfig
 import com.toasteralley.emberwatch.ads.AdManager
 import com.toasteralley.emberwatch.core.CoinMultipliers
 import com.toasteralley.emberwatch.core.DiamondPerk
+import com.toasteralley.emberwatch.core.EnemyPool
 import com.toasteralley.emberwatch.core.Enhancement
 import com.toasteralley.emberwatch.core.Gates
 import com.toasteralley.emberwatch.core.NumberFormat
@@ -88,6 +89,13 @@ class EnhancementActivity : ListScreenActivity() {
             "Milestone bonus (+5%, compounding) every ${Enhancement.MILESTONE_EVERY} levels. Current cap: ${Enhancement.ENHANCEMENT_CAP}.")
         val maxed = lvl >= Enhancement.ENHANCEMENT_CAP
         val cost = Enhancement.cost(lvl)
+        val pool = EnemyPool.allowedTiers(lvl)
+        note("Enemy pool: " + pool.joinToString { it.name.lowercase().replace('_', '-') } +
+            when {
+                lvl < EnemyPool.DANGEROUS_UNLOCK_LEVEL -> " · dangerous shapes join at level ${EnemyPool.DANGEROUS_UNLOCK_LEVEL}"
+                lvl < EnemyPool.ALL_UNLOCK_LEVEL -> " · boss-level & endgame shapes join at level ${EnemyPool.ALL_UNLOCK_LEVEL}"
+                else -> ""
+            })
         addRow("Level $lvl / ${Enhancement.ENHANCEMENT_CAP}",
             "x${"%.2f".format(Enhancement.multiplier(lvl))} → ${if (maxed) "cap reached" else "x${"%.2f".format(Enhancement.multiplier(lvl + 1))}"}" +
                 (if (!maxed && (lvl + 1) % Enhancement.MILESTONE_EVERY == 0) "  ★ milestone" else ""),
@@ -179,7 +187,8 @@ class SettingsActivity : ListScreenActivity() {
     private fun resetProgress() {
         val fresh = SaveData()
         save.coins = fresh.coins; save.diamonds = 0; save.cores = 0; save.bestWave = 0; save.totalRuns = 0
-        save.unlockedTier = 1; save.selectedTier = 1; save.milestoneRewardedWave = 0
+        save.selectedStage = 1; save.legacyUnlockedStage = 1
+        save.stageBestWave.clear(); save.stageMilestonesClaimed.clear()
         save.workshop.clear(); save.perks.clear(); save.ultimates.clear(); save.research.clear()
         save.activeResearch.clear(); save.enhancement = 0
     }

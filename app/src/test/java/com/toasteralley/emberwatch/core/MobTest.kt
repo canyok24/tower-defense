@@ -46,4 +46,21 @@ class MobTest {
         assertTrue(boss.radius > normal.radius)
         assertEquals(WaveRules.bossReward(10), boss.coins, 1e-9)
     }
+
+    @Test fun spiralBossIsBiggestOfAllMobs() {
+        val maxNormal = MobShape.SPAWNABLE.maxOf { MobProfiles.of(it).radius } * SizeTier.entries.maxOf { it.scale }
+        val boss = MobProfiles.of(MobShape.SPIRAL)
+        assertTrue(boss.radius > maxNormal)
+        assertTrue(boss.speed < MobShape.SPAWNABLE.minOf { MobProfiles.of(it).speed })
+        assertTrue(boss.hp > MobShape.SPAWNABLE.maxOf { MobProfiles.of(it).hp })
+    }
+
+    @Test fun bossRewardFeedsCoinEconomy() {
+        val e = GameEngine(TowerStats.resolve(SaveData()), emptyMap(), coinMultiplier = 2.0, startWave = 30, seed = 9)
+        val boss = e.spawnBoss()
+        val before = e.runCoins
+        e.hit(boss, Double.MAX_VALUE)
+        assertEquals(WaveRules.bossReward(30) * 2.0, e.runCoins - before, 1e-9)
+        assertEquals(e.runCoins, e.takeUnbankedCoins(), 1e-9)  // banked into SaveData.coins by GameActivity
+    }
 }

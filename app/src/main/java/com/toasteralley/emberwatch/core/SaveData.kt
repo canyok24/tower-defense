@@ -15,10 +15,14 @@ class SaveData {
     var cores: Long = 0
     var bestWave: Int = 0
     var totalRuns: Int = 0
-    var unlockedTier: Int = 1
-    var selectedTier: Int = 1
-    /** Highest best-wave milestone (multiple of 10) already paid out in Diamonds. */
-    var milestoneRewardedWave: Int = 0
+    /** Stage chosen on the main menu (1..24). */
+    var selectedStage: Int = 1
+    /** Best waves CLEARED per stage (key = stage number). */
+    val stageBestWave: MutableMap<Int, Int> = mutableMapOf()
+    /** Number of milestones already paid per stage (they are paid in order). */
+    val stageMilestonesClaimed: MutableMap<Int, Int> = mutableMapOf()
+    /** v1 -> v2 migration: stages 1..N stay unlocked for players who had unlocked old tiers. */
+    var legacyUnlockedStage: Int = 1
     val workshop: MutableMap<String, Int> = mutableMapOf()
     val perks: MutableMap<String, Int> = mutableMapOf()
     val ultimates: MutableMap<String, Int> = mutableMapOf()
@@ -40,5 +44,8 @@ class SaveData {
     fun level(u: UltimateWeapon) = ultimates[u.name] ?: 0
     fun level(r: ResearchProject) = research[r.name] ?: 0
 
-    companion object { const val CURRENT_VERSION = 1 }
+    companion object {
+        /** v1: 10 difficulty tiers. v2: 24 stages with per-stage best wave + milestone rewards. */
+        const val CURRENT_VERSION = 2
+    }
 }

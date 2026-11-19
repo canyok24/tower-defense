@@ -64,10 +64,43 @@ object WaveRules {
 
     fun mobCount(wave: Int): Int = (8 + wave * 1.1).toInt().coerceAtMost(70)
 
-    /** Baseline HP for an "ellipse" at [wave]. Polynomial early, gentle exponential late. */
-    fun hpScale(wave: Int): Double = 6.0 * (1 + 0.22 * (wave - 1)) * 1.035.pow(wave - 1)
+    /** Exponential growth runs to this wave; after it growth turns polynomial so 67,500+ waves stay finite. */
+    const val EXP_KNEE = 1000
 
-    fun damageScale(wave: Int): Double = 4.0 * (1 + 0.12 * (wave - 1)) * 1.025.pow(wave - 1)
+    /**
+     * Baseline HP for an "ellipse" at [wave]:
+     *   6 x (1 + 0.22(w-1)) x 1.035^min(w-1, 1000) x (max(w,1000)/1000)^4
+     * (wave 1000 ~ 1.2e18 base; wave 67,500 ~ 1.5e27 - finite for every stage).
+     */
+    fun hpScale(wave: Int): Double =
+        6.0 * (1 + 0.22 * (wave - 1)) * 1.035.pow(minOf(wave - 1, EXP_KNEE)) * (maxOf(wave, EXP_KNEE) / EXP_KNEE.toDouble()).pow(4)
+
+    fun damageScale(wave: Int): Double =
+        4.0 * (1 + 0.12 * (wave - 1)) * 1.025.pow(minOf(wave - 1, EXP_KNEE)) * (maxOf(wave, EXP_KNEE) / EXP_KNEE.toDouble()).pow(3)
+
+    /**
+     * Veteran traits: because dangerous / boss-level shapes stay locked until high
+     * Enhancement, common and mid-tier mobs pick up behaviours as waves climb so late
+     * waves stay hard regardless of the pool:
+     *   wave >= 40  : +shield (grows to +100% HP by wave 440)
+     *   wave >= 120 : straight movers start weaving (zigzag / sine)
+     *   wave >= 200 : regeneration +1%/s (+2%/s from wave 600)
+     *   wave >= 300 : contact damage becomes piercing (ignores half of defense)
+     *   wave >= 500 : non-ranged mobs split on death
+     *   speed       : +0.4%/wave, capped at x1.8 (see speedScale)
+     * Profiles that already have a trait keep the stronger value.
+     */
+    fun veteran(p: MobProfile, wave: Int): MobProfile {
+        if (wave < 40) return p
+        val shield = (0.25 + (wave - 40) / 400.0 * 0.75).coerceAtMost(1.0)
+        return p.copy(
+            shield = maxOf(p.shield, shield),
+            movement = if (wave >= 120 && p.movement == Movement.STRAIGHT) (if (wave % 2 == 0) Movement.ZIGZAG else Movement.SINE_WEAVE) else p.movement,
+            regen = if (wave >= 600) maxOf(p.regen, 0.02) else if (wave >= 200) maxOf(p.regen, 0.01) else p.regen,
+            damageType = if (wave >= 300 && p.damageType == DamageType.CONTACT) DamageType.PIERCING else p.damageType,
+            splits = p.splits || (wave >= 500 && !p.ranged),
+        )
+    }
 
     fun speedScale(wave: Int): Float = (1f + wave * 0.004f).coerceAtMost(1.8f)
 
@@ -86,12 +119,37 @@ object WaveRules {
         MobTier.ENDGAME to if (wave >= 75) ((wave - 74) * 0.1).coerceAtMost(6.0) else 0.0,
     )
 
-    fun pickShape(wave: Int, rng: kotlin.random.Random): MobShape {
-        val w = tierWeights(wave).filterValues { it > 0 }
+    /** Picks a shape: wave sets the tier mix, Enhancement level ([EnemyPool]) sets which tiers may appear. */
+    fun pickShape(wave: Int, rng: kotlin.random.Random, enhancementLevel: Int = Int.MAX_VALUE): MobShape {
+        val allowed = EnemyPool.allowedTiers(enhancementLevel)
+        val w = tierWeights(wave).filter { (t, v) -> v > 0 && t in allowed }
+            .ifEmpty { mapOf(MobTier.COMMON to 1.0) }
         var roll = rng.nextDouble() * w.values.sum()
         var tier = MobTier.COMMON
         for ((t, weight) in w) { roll -= weight; if (roll <= 0) { tier = t; break } }
         val pool = MobShape.ofTier(tier)
         return pool[rng.nextInt(pool.size)]
     }
+}
+
+/**
+ * Which normal-mob tiers can spawn, unlocked by Enhancement level (not by wave).
+ * Thresholds are constants so they keep working when ENHANCEMENT_CAP rises past 1000.
+ *   level 0..1000    : common + mid
+ *   level 1001..5000 : + dangerous
+ *   level 5001+      : + boss-level + endgame (yin-yang)
+ * The Spiral is never in the pool: it only appears as the boss every 10 waves.
+ */
+object EnemyPool {
+    const val DANGEROUS_UNLOCK_LEVEL = 1001
+    const val ALL_UNLOCK_LEVEL = 5001
+
+    fun allowedTiers(enhancementLevel: Int): Set<MobTier> = buildSet {
+        add(MobTier.COMMON); add(MobTier.MID)
+        if (enhancementLevel >= DANGEROUS_UNLOCK_LEVEL) add(MobTier.DANGEROUS)
+        if (enhancementLevel >= ALL_UNLOCK_LEVEL) { add(MobTier.BOSS_LEVEL); add(MobTier.ENDGAME) }
+    }
+
+    fun allowedShapes(enhancementLevel: Int): Set<MobShape> =
+        allowedTiers(enhancementLevel).flatMap { MobShape.ofTier(it) }.toSet()
 }

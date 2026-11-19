@@ -240,7 +240,7 @@ class GameView(context: Context, val engine: GameEngine) : SurfaceView(context),
         fill.color = Palette.BG_PANEL; fill.alpha = 255
         c.drawRect(0f, 0f, w, hud.bottom, fill)
         text.color = Palette.TEXT; text.textSize = 18 * density; text.isFakeBoldText = true
-        c.drawText("WAVE ${e.wave}" + if (e.tier > 1) "  T${e.tier}" else "", waveLabel.left, hud.top + 24 * density, text)
+        c.drawText("WAVE ${e.wave}  S${e.stage}", waveLabel.left, hud.top + 24 * density, text)
         text.isFakeBoldText = false; text.textSize = 12 * density; text.color = Palette.TEXT_DIM
         c.drawText("Coins ${NumberFormat.compact(e.runCoins)}  Cash ${NumberFormat.compact(e.cash)}", waveLabel.left, hud.top + 44 * density, text)
         // health bar

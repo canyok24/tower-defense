@@ -60,7 +60,9 @@ class GameEngine(
     val ultimates: Map<UltimateWeapon, Int>,
     val coinMultiplier: Double,
     val coreMultiplier: Double = 1.0,
-    val tier: Int = 1,
+    val stage: Int = 1,
+    /** Enhancement level: decides the normal-mob pool (see EnemyPool). */
+    val enhancementLevel: Int = 0,
     startWave: Int = 1,
     seed: Long = System.nanoTime(),
     var godMode: Boolean = false,
@@ -76,6 +78,7 @@ class GameEngine(
     }
 
     private val rng = Random(seed)
+    val stageDef = StageDefinitions.get(stage)
     var worldH = 2.1f
         set(v) { field = v.coerceIn(1.2f, 3f) }
     val towerX = 0.5f
@@ -167,7 +170,7 @@ class GameEngine(
             if (spawnTimer <= 0f) {
                 spawnTimer += spawnInterval
                 toSpawn--
-                if (mobs.size < MAX_MOBS) spawnMob(WaveRules.pickShape(wave, rng))
+                if (mobs.size < MAX_MOBS) spawnMob(WaveRules.pickShape(wave, rng, enhancementLevel))
             }
             return
         }
@@ -185,14 +188,14 @@ class GameEngine(
     }
 
     fun spawnMob(shape: MobShape, x: Float = 0.08f + rng.nextFloat() * 0.84f, y: Float? = null, child: Boolean = false): Mob {
-        val prof = MobProfiles.of(shape)
+        val prof = WaveRules.veteran(MobProfiles.of(shape), wave).let { if (child) it.copy(splits = false) else it }
         val look = MobLook.random(shape, rng).let { if (child) it.copy(size = SizeTier.SMALL) else it }
-        val hp = WaveRules.hpScale(wave) * prof.hp * Tiers.hpMult(tier) * (if (child) 0.35 else 1.0)
+        val hp = WaveRules.hpScale(wave) * prof.hp * stageDef.hpMult * (if (child) 0.35 else 1.0)
         val m = Mob(
             look = look, profile = prof, maxHp = hp,
-            damage = WaveRules.damageScale(wave) * prof.damage * Tiers.damageMult(tier),
+            damage = WaveRules.damageScale(wave) * prof.damage * stageDef.damageMult,
             x = x, y = y ?: -0.05f,
-            speed = prof.speed * WaveRules.speedScale(wave) * worldH,
+            speed = prof.speed * WaveRules.speedScale(wave) * stageDef.speedMult.toFloat() * worldH,
             radius = prof.radius * look.size.scale,
             coins = WaveRules.coinScale(wave) * prof.coin * (if (child) 0.3 else 1.0),
             cash = WaveRules.cashScale(wave) * prof.coin * (if (child) 0.3 else 1.0),
@@ -206,9 +209,9 @@ class GameEngine(
     fun spawnBoss(): Mob {
         val prof = MobProfiles.of(MobShape.SPIRAL)
         val look = MobLook(MobShape.SPIRAL, 0, OutlineStyle.GLOW, SizeTier.LARGE, rotationSpeed = 0.8f, pulsing = true, innerShape = MobShape.YIN_YANG.ordinal)
-        val hp = WaveRules.hpScale(wave) * prof.hp * Tiers.hpMult(tier) * (1 + wave / 100.0)
+        val hp = WaveRules.hpScale(wave) * prof.hp * stageDef.hpMult * (1 + wave / 100.0)
         val m = Mob(
-            look, prof, hp, WaveRules.damageScale(wave) * prof.damage * Tiers.damageMult(tier),
+            look, prof, hp, WaveRules.damageScale(wave) * prof.damage * stageDef.damageMult,
             x = 0.5f, y = -0.1f, speed = prof.speed * worldH, radius = prof.radius,
             coins = WaveRules.bossReward(wave), cash = WaveRules.cashScale(wave) * 25, isBoss = true,
         )

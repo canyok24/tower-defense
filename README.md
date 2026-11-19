@@ -11,10 +11,10 @@ Package: `com.toasteralley.emberwatch` · minSdk 24 · target/compile SDK 35 · 
 **Core loop**
 - One tower anchored at the bottom centre, mobs spawn at the top and descend. Portrait only, tuned for tall phones (Galaxy S25 Ultra, about 19.5:9). The status bar, display cutout and gesture-nav insets are all handled.
 - Waves never end. Each wave is timed: mobs spawn over 16 s, then the next wave starts once the field is clear or 10 s have passed.
-- **Spiral Boss every 10 waves.** It's bigger and slower, has much more HP and a shield, and hits hard at the wall. Its coin reward is `50 × (wave ÷ 10)` before multipliers. Killing it also drops Diamonds and Research Cores.
+- **Spiral Boss every 10 waves.** It's the biggest mob in the game: radius 0.11 of the screen width, against 0.0625 for the largest normal mob (a LARGE yin-yang). It's also the slowest, has 60x base HP (growing a further +1% per wave) and a shield, and hits hard at the wall. Its coin reward is `50 × (wave ÷ 10)`, times the full coin multiplier. Those coins are banked into the same balance that pays for Workshop upgrades and Research Bay projects. Killing it also drops Diamonds and Research Cores. The Spiral is never part of the normal-mob pool.
 - During a run you earn **Cash** and spend it on run-only upgrades (ATK / RATE / HP). Cash resets every run.
 - Speed button: 1x / 2x / 3x / 5x. The simulation always uses fixed 1/60 s steps, and higher speeds just run more steps per frame.
-- Difficulty **Tiers** 1–10. Each tier multiplies mob HP by 3x and mob damage by 2.5x per step, and coins by 2.2x. Reaching wave 50 on your highest tier unlocks the next one.
+- **24 Stages**, chosen on the main menu. Each stage raises mob HP, damage and speed, pays a bigger coin multiplier, keeps its own best wave, and has its own milestone reward table. See [Stages](#stages).
 
 **Mobs: simple shapes, difficulty comes from behaviour**
 - There are 20 shapes, each a cached unit-size `Path`: pentagon, hexagon, heptagon, octagon, nonagon, decagon, star, crescent, cross, arrowhead, chevron, parallelogram, trapezoid, ellipse, rounded rectangle, ring, heart, clover, yin-yang and spiral. Circle, square, triangle and diamond are never used, and a unit test enforces this.
@@ -31,7 +31,25 @@ Package: `com.toasteralley.emberwatch` · minSdk 24 · target/compile SDK 35 · 
   - boss-level: nonagon, decagon, star, clover, heart
   - endgame: yin-yang, a rare elite from wave 75
   - spiral: Spiral Boss only
-- The tier mix shifts toward harder shapes as waves climb.
+- **Which tiers can spawn depends on your Enhancement level** (`core/MobBehavior.kt → EnemyPool`). The thresholds are constants, so they keep working when the cap rises:
+
+  | Enhancement level | Normal-mob pool |
+  |---|---|
+  | 0 – 1,000 | common + mid |
+  | 1,001 – 3,000 and 3,001 – 5,000 | + dangerous |
+  | 5,001+ | everything, including boss-level and yin-yang |
+
+  The Spiral is always the 10-wave boss and never a normal mob. With today's cap of 1,000, dangerous and higher shapes only show up after a future cap release, or when the debug override sets Enhancement above the cap.
+- Within the allowed pool, the wave still shifts the mix toward harder tiers (mid from wave 3, dangerous from 12, boss-level from 30, endgame from 75).
+- **Veteran traits keep late waves hard without the locked shapes.** Common and mid-tier mobs pick up behaviours as waves climb:
+  - a shield from wave 40, growing to +100% HP by wave 440
+  - zigzag or sine movement from wave 120
+  - regeneration from wave 200
+  - piercing contact damage from wave 300
+  - splitting on death from wave 500
+  - up to +80% speed
+
+  On top of that, HP and damage keep scaling: exponential up to wave 1,000, then polynomial (HP ×(w/1000)^4, damage ×(w/1000)^3), so even stage 24's wave 67,500 stays a finite number.
 
 **Tower stats:** health, attack, defense (damage reduction %), attack speed, crit chance and crit factor, plus super crits from Diamond Perks.
 
@@ -43,11 +61,11 @@ Package: `com.toasteralley.emberwatch` · minSdk 24 · target/compile SDK 35 · 
    - Chain Arc: chain lightning through several mobs
    - Gravity Well: drags mobs back toward the top and damages them
 3. **Diamond Perks.** Paid with Diamonds, opening at wave 15: damage multiplier, health multiplier, crit-rate multiplier, critical factor, advanced crit rate, advanced crit factor, and super crits (a chance to crit again on a crit, with its own factor).
-4. **Enhancement.** One global multiplier that applies on top of every other window. It opens at wave 30 and is very expensive (`25,000 × 1.09^level` coins). See the formula below.
+4. **Enhancement.** One global multiplier that applies on top of every other window. It opens at wave 30, is capped at **level 1,000**, and is very expensive. See the formula and cost curve below.
 5. **Research Bay.** Its own currency (Research Cores) plus Coins. Timers run on the real wall clock and keep going while the app is closed. Projects are gated by best wave, and 2 run at once (Bay Expansion research raises this to 4).
    - **Light Speed Shots** is the flagship project: a single level costing 3,000,000 coins + 50 cores and 20 hours, unlocked at best wave 10. Shots hit instantly as a hitscan beam, and Projectile Velocity research turns into pure fire rate (+3% per level).
    - The other projects are Starting Cash, Ember Rounds (damage), Wall Plating (health), Rapid Breech (fire rate), Projectile Velocity, Coin Ledger (coin bonus), Core Siphon (core yield) and Bay Expansion.
-6. **Coin multipliers.** Owned packs, a 1.5x rewarded-ad boost, Coin Ledger research, the Enhancement multiplier and the Tier multiplier all multiply together and apply to every coin source: kills, wave bonuses and boss rewards. A rewarded ad adds 20 minutes of 1.5x, stacking up to 2 hours on the wall clock and saved across restarts. Starting Cash research raises your opening run cash.
+6. **Coin multipliers.** Owned packs, a 1.5x rewarded-ad boost, Coin Ledger research, the Enhancement multiplier, the selected Stage's coin multiplier and your permanent Stage milestone coin bonuses all multiply together and apply to every coin source: kills, wave bonuses and boss rewards. A rewarded ad adds 20 minutes of 1.5x, stacking up to 2 hours on the wall clock and saved across restarts. Starting Cash research raises your opening run cash.
 
 **Store (Google Play Billing, one-time non-consumables)**
 
@@ -59,6 +77,8 @@ Package: `com.toasteralley.emberwatch` · minSdk 24 · target/compile SDK 35 · 
 | `pack_tier4` | $149.99 | 4x coins |
 | `pack_tier5` | $499.99 | 10x coins |
 
+The top pack is shown as $499.99 here and as the fallback label in the app. If you'd rather charge a flat $500, set it to **$500.00** in Play Console. The app always shows Play's localized price, so no code change is needed.
+
 All packs together give 1.5 × 2 × 3 × 4 × 10 = **360x**. Prices are set in Play Console, and the app shows `ProductDetails.formattedPrice`. A Restore Purchases button is included. Entitlements are stored separately from progress and are never wiped, not even by Settings → Reset progress.
 
 ### Enhancement formula
@@ -69,7 +89,24 @@ milestone(L) = 1.05 ^ floor(L / 50)    (+5% compounding bonus every 50 levels)
 multiplier   = base · milestone
 P = ln(50 / 1.05^20) / ln(100) ≈ 0.6376  → multiplier(1000) = 100 exactly
 ```
-Sample values: L10 = 2.00, L20 = 3.11, L50 = 5.86, L100 = 9.57, L500 = 39.5, L1000 = 100. The multiplier applies to health, damage, the bonus part of the crit and super-crit factors, ultimate-weapon damage (which scales with attack) and all coin income. It does not apply to probability stats (defense, crit chance) or fire rate, which stay inside their caps.
+Sample values: L10 = 2.00, L20 = 3.11, L50 = 5.86, L100 = 9.57, L500 = 39.5, L1000 = 100. The formula is defined past the cap (L6000 ≈ 41,000x) for future releases.
+
+**Cost curve** (coins to buy the next level, `Enhancement.cost`). Steep but finite:
+```
+L < 100 : 25,000 × 1.09^L
+L ≥ 100 : cost(100) × 1.035^(L − 100)     (≈ 31x more per 100 levels)
+```
+| Level | Cost of next level |
+|---|---|
+| 0 | 25.0K |
+| 99 | 127M |
+| 100 | 138M |
+| 500 | 131T |
+| 999 | 3.73ac (3.7e21) |
+
+The total cost from 0 to 1,000 is about 1.1e23. Even L5000 (about 4e81) is still a finite Double.
+
+**Number formatting** (`NumberFormat.compact`): K, M, B, T, then two-letter suffixes aa (1e15), ab (1e18), ac (1e21) … az, ba … zz (up to 1e2043). Every finite Double formats, for example "3.73ac". The multiplier applies to health, damage, the bonus part of the crit and super-crit factors, ultimate-weapon damage (which scales with attack) and all coin income. It does not apply to probability stats (defense, crit chance) or fire rate, which stay inside their caps.
 
 ---
 
@@ -155,34 +192,73 @@ A hidden developer/admin menu for testing progression without grinding.
 - **Main menu:** press and hold the gear icon (top right) for **at least 2 seconds** and release. Then, within 10 seconds, tap the **EMBERWATCH** title **5 times within 3 seconds**.
 - **In a run:** hold the **II** (pause) button for 2 seconds and release. Then tap the **WAVE** label at top left 5 times within 3 seconds.
 
-**Main-menu override:** bypass all progression gates (menus, research gates, tiers); unlock all tiers; max all research or unlock only Light Speed Shots; unlock all Ultimate Weapons; max all Diamond Perks; complete running research timers now; set Coins, Diamonds, Research Cores and best wave; start the next run at wave N; god mode; locally grant or revoke any store pack (not a real purchase).
+**Main-menu override:** bypass all progression gates (menus, research gates, stages); unlock all 24 stages (access only, no rewards); **set the Enhancement level to anything from 0 to 100,000, even above the cap**, to test the enemy pools (for example 1500 adds dangerous shapes, 6000 adds everything); set the selected stage's best cleared wave (this pays its milestones); max all research or unlock only Light Speed Shots; unlock all Ultimate Weapons; max all Diamond Perks; complete running research timers now; set Coins, Diamonds, Research Cores and best wave; start the next run at wave N; god mode; locally grant or revoke any store pack (not a real purchase).
 
 **In-run override:** +1 wave, +10 waves, jump to wave N, force-spawn the Spiral Boss, toggle god mode, +1M cash, full heal.
 
 ---
 
-## Roadmap: Enhancement cap releases
-`Enhancement.ENHANCEMENT_CAP` in `core/Progression.kt` is the only thing that changes per release. The formula is defined for every level, so raising the cap needs no save migration.
+## Stages
 
-| Release | Cap |
-|---------|-----|
-| 1.0 (this) | 100 |
-| next | 200 |
-| then | 300 → 400 → … |
-| long-term | toward 100,000 via periodic updates |
+All stage tuning lives in **`app/src/main/java/com/toasteralley/emberwatch/core/StageDefinitions.kt`**. These are the formulas behind the table:
+
+| | Formula | Stage 1 | Stage 2 | Stage 12 | Stage 24 |
+|---|---|---|---|---|---|
+| Unlock (waves cleared in previous stage) | 500 × 1.15^(n−2), rounded to 50 | — | 500 | 2,000 | 10,800 |
+| Full rewards at wave | 10,000 + 2,500 × (n−1) | 10,000 | 12,500 | 37,500 | 67,500 |
+| Mob HP | 4^(n−1) | ×1 | ×4 | ×4.2M | ×7.0e13 |
+| Mob damage | 3^(n−1) | ×1 | ×3 | ×177K | ×9.4e10 |
+| Mob speed | 1 + 0.03 × (n−1) | ×1.00 | ×1.03 | ×1.33 | ×1.69 |
+| Coin multiplier | 2.2^(n−1) | ×1 | ×2.2 | ×5,840 | ×7.5e7 |
+
+All unlock requirements, stages 2–24: 500, 600, 650, 750, 850, 1000, 1150, 1350, 1550, 1750, 2000, 2350, 2700, 3100, 3550, 4050, 4700, 5400, 6200, 7100, 8200, 9400, 10800.
+
+**Milestone rewards (per stage).** There are 11 milestones per stage, at these fractions of the stage's full-reward wave: 0.1%, 0.25%, 0.5%, 1%, 2.5%, 5%, 10%, 25%, 50%, 75% and 100%. For Stage 1 that's waves 10, 25, 50, 100, 250, 500, 1,000, 2,500, 5,000, 7,500 and **10,000**. The 10,000 milestone completes every Stage 1 reward.
+
+| Milestone # | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 (full) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Diamonds (Stage 1) | 10 | 15 | 25 | 40 | 60 | 100 | 150 | 250 | 400 | 500 | 1000 |
+| Research Cores (Stage 1) | 2 | 4 | 6 | 10 | 20 | 35 | 50 | 80 | 120 | 160 | 300 |
+| Permanent coin bonus | – | – | – | +1% | +1% | +1% | +2% | +2% | +2% | +2% | +3% |
+
+- Diamond and core rewards scale by ×(1 + 0.5 × (n−1)) per stage, so Stage 24 pays 12.5x.
+- Coin bonuses are permanent, multiply together and apply on every stage. That's ×1.144 per completed stage and about ×25 if you complete all 24.
+- Rewards are paid in order, once each, when a run ends: the stage records waves *cleared* (the wave you were on when the wall fell doesn't count).
+- The menu gates (Workshop crit at wave 5, Perks 15, UW 20, Enhancement 30, research gates) still use your best wave reached on any stage.
+
+**Save migration (v1 → v2).**
+- Old difficulty tier *N* becomes Stage *N*, and every tier you had unlocked stays unlocked as a stage.
+- Your old best wave becomes your Stage 1 progress, and any Stage 1 milestones you've already passed are paid out on migration.
+- The selected tier carries over as the selected stage.
+- Diamonds already earned are kept.
+
+## Roadmap: Enhancement cap releases
+`Enhancement.ENHANCEMENT_CAP` in `core/Progression.kt` is the only thing that changes per release. The formula and the `EnemyPool` thresholds are defined for every level, so raising the cap needs no save migration.
+
+| Release | Cap | Effect |
+|---------|-----|--------|
+| 1.1 (this) | 1,000 | common + mid mobs only |
+| next | 2,000 | dangerous shapes start appearing at L1,001 |
+| then | 3,000 → 4,000 → 5,000 | |
+| after that | 6,000+ | boss-level and yin-yang join at L5,001 |
+| long-term | toward 100,000 via periodic updates | |
 
 Before each cap bump, re-check the cost curve (`Enhancement.cost`) against the coin income at that stage.
 
 ## Tests
 `./gradlew testDebugUnitTest` covers:
-- the Enhancement formula (2.0 at L10, 100 at L1000, monotonic, milestone jumps)
+- the Enhancement formula (2.0 at L10, 100 at L1000, monotonic, milestone jumps), the cap of 1,000, and a cost curve that stays finite and increasing through L6000
+- the enemy pool per Enhancement level at the boundaries 0/1/1000/1001/3000/3001/5000/5001, Spiral never in the pool, the engine honouring the pool, veteran traits, and finite HP at stage 24's last wave
+- the Spiral Boss being bigger than the largest normal mob (any size tier), slower and tankier, and its reward going into the banked coins
+- stages: table shape, Stage 2 unlocking after clearing 500, Stage 1 completing at 10,000, milestones paid once along the way, stage multipliers
+- save migration v1 → v2
+- number formatting (K/M/B/T/aa…/zz, rounding edges, ∞)
 - boss reward scaling
 - 20 shapes with no forbidden ones, combo counts (≥ 2,000 base, ≥ 5,000 with extras) and tier ranking
 - cost curves
 - coin-multiplier stacking (all packs = 360x, plus boost × research × enhancement) and rewarded-boost stacking up to 2 h
 - research timers on a fake clock, plus gates, slots and bypass
 - Light Speed conversion into fire rate and instant hits
-- milestone Diamonds
 - the debug gate: closed when `!DEBUG`, and the secret-gesture timing
 - simulation smoke tests: a fresh run falls, upgraded runs go further, and god mode runs endless waves from wave 990
 

@@ -30,6 +30,7 @@ class GameActivity : AppCompatActivity(), GameView.Listener {
     private lateinit var view: GameView
     private val handler = Handler(Looper.getMainLooper())
     private var finished = false
+    private var lastReward: com.toasteralley.emberwatch.core.StageReward? = null
     private val banker = object : Runnable {
         override fun run() { bank(); handler.postDelayed(this, 5000) }
     }
@@ -47,7 +48,8 @@ class GameActivity : AppCompatActivity(), GameView.Listener {
             ultimates = UltimateWeapon.entries.associateWith { save.level(it) },
             coinMultiplier = app.coinMultiplier(),
             coreMultiplier = ResearchProject.CORE_YIELD.effect(save.level(ResearchProject.CORE_YIELD)),
-            tier = save.selectedTier,
+            stage = save.selectedStage,
+            enhancementLevel = save.enhancement,
             startWave = DebugGate.startWave(BuildConfig.DEBUG, save),
             godMode = DebugGate.godMode(BuildConfig.DEBUG, save),
         )
@@ -74,7 +76,7 @@ class GameActivity : AppCompatActivity(), GameView.Listener {
             save.coins += engine.takeUnbankedCoins()
             save.diamonds += engine.runDiamonds
             save.cores += engine.runCores
-            RunRewards.applyRunEnd(save, engine.wave, engine.tier)
+            lastReward = RunRewards.applyRunEnd(save, engine.wave, engine.stage)
         }
         save.runsSinceInterstitial++
         app.persist()
@@ -84,6 +86,10 @@ class GameActivity : AppCompatActivity(), GameView.Listener {
 
     override fun onReturnToMenu() {
         endRun()
+        lastReward?.takeIf { it.diamonds > 0 || it.cores > 0 }?.let {
+            android.widget.Toast.makeText(this, "Stage ${engine.stage} milestones: +${it.diamonds} ◆, +${it.cores} cores" +
+                (if (it.coinBonus > 0) ", +${"%.1f".format(it.coinBonus * 100)}% coins forever" else ""), android.widget.Toast.LENGTH_LONG).show()
+        }
         if (save.runsSinceInterstitial >= 3 && !app.noAds) {
             save.runsSinceInterstitial = 0; app.persist()
             AdManager.showInterstitial(this, app.noAds) { finish() }

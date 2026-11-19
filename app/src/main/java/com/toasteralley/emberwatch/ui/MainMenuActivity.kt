@@ -22,6 +22,8 @@ import com.toasteralley.emberwatch.core.Gates
 import com.toasteralley.emberwatch.core.NumberFormat
 import com.toasteralley.emberwatch.core.Palette
 import com.toasteralley.emberwatch.core.SecretGesture
+import com.toasteralley.emberwatch.core.StageDefinitions
+import com.toasteralley.emberwatch.core.Stages
 import com.toasteralley.emberwatch.debug.DebugTools
 import kotlinx.coroutines.launch
 
@@ -97,17 +99,26 @@ class MainMenuActivity : AppCompatActivity() {
             "Coin multiplier x${NumberFormat.compact(app.coinMultiplier(now))}" + if (boostLeft > 0) " (boost ${NumberFormat.duration(boostLeft)})" else "",
             13f, Palette.TEXT_DIM).apply { gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(12)) })
 
-        // tier selector
-        val maxTier = if (app.bypassGates) com.toasteralley.emberwatch.core.Tiers.MAX_TIER else save.unlockedTier
-        save.selectedTier = save.selectedTier.coerceIn(1, maxTier)
+        // stage selector (Stages 1-24, see core/StageDefinitions.kt)
+        val maxStage = Stages.highestUnlocked(save, app.bypassGates)
+        save.selectedStage = save.selectedStage.coerceIn(1, maxStage)
+        val st = save.selectedStage
+        val def = StageDefinitions.get(st)
         content.addView(LinearLayout(this).apply {
             gravity = Gravity.CENTER
-            addView(emberButton("◀", save.selectedTier > 1) { save.selectedTier--; app.persist(); build() })
-            addView(label("  Tier ${save.selectedTier}  ", 18f, Palette.TEXT, bold = true))
-            addView(emberButton("▶", save.selectedTier < maxTier) { save.selectedTier++; app.persist(); build() })
+            addView(emberButton("◀", st > 1) { save.selectedStage--; app.persist(); build() })
+            addView(label("  Stage $st / ${StageDefinitions.STAGE_COUNT}  ", 18f, Palette.TEXT, bold = true))
+            addView(emberButton("▶", st < maxStage) { save.selectedStage++; app.persist(); build() })
         })
-        if (save.unlockedTier < com.toasteralley.emberwatch.core.Tiers.MAX_TIER)
-            content.addView(label("Reach wave ${Gates.TIER_UNLOCK_WAVE} on your highest tier to unlock the next.", 12f, Palette.TEXT_DIM).apply { gravity = Gravity.CENTER })
+        val next = Stages.nextMilestone(save, st)
+        val info = StringBuilder("Best cleared: ${Stages.best(save, st)} · HP x${NumberFormat.compact(def.hpMult)} · coins x${NumberFormat.compact(def.coinMult)}\n")
+        info.append(if (next == null) "All Stage $st rewards earned" else
+            "Next reward at wave ${next.wave}: ◆${next.reward.diamonds}, ${next.reward.cores} cores" +
+                (if (next.reward.coinBonus > 0) ", +${(next.reward.coinBonus * 100).toInt()}% coins" else "") +
+                " · full rewards at ${def.fullRewardWave}")
+        if (st < StageDefinitions.STAGE_COUNT && !Stages.isUnlocked(save, st + 1, app.bypassGates))
+            info.append("\nStage ${st + 1} unlocks after clearing wave ${StageDefinitions.get(st + 1).unlockWave} here")
+        content.addView(label(info, 12f, Palette.TEXT_DIM).apply { gravity = Gravity.CENTER })
 
         fun menu(text: String, gate: Int, cls: Class<*>) {
             val open = Gates.open(gate, save, app.bypassGates)

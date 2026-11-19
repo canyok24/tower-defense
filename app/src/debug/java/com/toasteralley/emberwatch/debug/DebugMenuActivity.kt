@@ -4,7 +4,10 @@ import com.toasteralley.emberwatch.core.DiamondPerk
 import com.toasteralley.emberwatch.core.ResearchBay
 import com.toasteralley.emberwatch.core.ResearchProject
 import com.toasteralley.emberwatch.core.Products
-import com.toasteralley.emberwatch.core.Tiers
+import com.toasteralley.emberwatch.core.EnemyPool
+import com.toasteralley.emberwatch.core.Enhancement
+import com.toasteralley.emberwatch.core.StageDefinitions
+import com.toasteralley.emberwatch.core.Stages
 import com.toasteralley.emberwatch.core.UltimateWeapon
 import com.toasteralley.emberwatch.ui.ListScreenActivity
 
@@ -15,10 +18,21 @@ class DebugMenuActivity : ListScreenActivity() {
     override fun buildRows() {
         note("Debug builds only. Release builds do not contain this screen.")
         section("GATES & UNLOCKS")
-        addRow("Bypass progression gates", "Opens every menu, research gate and tier", if (save.debugBypassGates) "ON" else "OFF") {
+        addRow("Bypass progression gates", "Opens every menu, research gate and stage", if (save.debugBypassGates) "ON" else "OFF") {
             save.debugBypassGates = !save.debugBypassGates
         }
-        addRow("Unlock all tiers", "Sets unlocked tier to ${Tiers.MAX_TIER}", "Unlock") { save.unlockedTier = Tiers.MAX_TIER }
+        addRow("Enhancement level", "${save.enhancement} (cap ${Enhancement.ENHANCEMENT_CAP}; may exceed cap to test enemy pools: " +
+            "${EnemyPool.DANGEROUS_UNLOCK_LEVEL}+ dangerous, ${EnemyPool.ALL_UNLOCK_LEVEL}+ all)", "Set") {
+            DebugTools.askNumber(this, "Enhancement level (0-100000)") { save.enhancement = it.toInt().coerceIn(0, 100_000); app.persist(); build() }
+        }
+        addRow("Stage ${save.selectedStage} best cleared wave", "${Stages.best(save, save.selectedStage)} (pays milestones up to it)", "Set") {
+            DebugTools.askNumber(this, "Waves cleared on stage ${save.selectedStage}") {
+                Stages.recordWave(save, save.selectedStage, it.toInt().coerceAtLeast(0)); app.persist(); build()
+            }
+        }
+        addRow("Unlock all stages", "Grants permanent access to all ${StageDefinitions.STAGE_COUNT} stages (no rewards)", "Unlock") {
+            save.legacyUnlockedStage = StageDefinitions.STAGE_COUNT
+        }
         addRow("Max all research", "Every Research Bay project to max level", "Max") {
             save.activeResearch.clear(); ResearchProject.entries.forEach { save.research[it.name] = it.maxLevel }
         }
