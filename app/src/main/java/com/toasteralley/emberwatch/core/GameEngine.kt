@@ -15,7 +15,7 @@ class Mob(
     var y: Float,
     val speed: Float,          // world units / s
     val radius: Float,
-    val coins: Double,
+    val bounty: Double,
     val cash: Double,
     val isBoss: Boolean = false,
     val isChild: Boolean = false,
@@ -68,8 +68,8 @@ enum class BuyResult { BOUGHT, FREE, NO_CASH, MAXED, LOCKED }
 class GameEngine(
     val save: SaveData,
     val ultimates: Map<UltimateWeapon, Int> = UltimateWeapon.entries.associateWith { save.level(it) },
-    /** Packs x boost x research x enhancement x stage (Bounty is applied separately). */
-    val coinMultiplier: Double = 1.0,
+    /** Packs x boost x research x enhancement x stage (Bounty Gain is applied separately). */
+    val bountyMultiplier: Double = 1.0,
     val coreMultiplier: Double = 1.0,
     val stage: Int = 1,
     /** Enhancement level: decides the normal-mob pool (see EnemyPool). */
@@ -156,7 +156,7 @@ class GameEngine(
     private var frostSlow = 0f
 
     // results
-    var runCoins = 0.0; private set
+    var runBounty = 0.0; private set
     var runDiamonds = 0L; private set
     var runCores = 0L; private set
     var kills = 0; private set
@@ -229,7 +229,7 @@ class GameEngine(
     }
 
     private fun completeWave() {
-        earnCoins(WaveRules.coinScale(wave) * 4)
+        earnBounty(WaveRules.bountyScale(wave) * 4)
         earnCash(WaveRules.cashScale(wave) * 3)
         // Interest Per Wave: on held cash, capped at a multiple of the wave's base cash.
         if (stats.interest > 0) cash += minOf(cash * stats.interest, WaveRules.cashScale(wave) * Upgrade.INTEREST_CAP_WAVE_CASH)
@@ -240,8 +240,8 @@ class GameEngine(
         startWave(wave + 1)
     }
 
-    /** Coin pipeline: base x coinMultiplier (packs, boost, research, enhancement, stage) x Bounty. */
-    private fun earnCoins(base: Double) { runCoins += base * coinMultiplier * stats.bounty }
+    /** Bounty pipeline: base x bountyMultiplier (packs, boost, research, enhancement, stage) x Bounty Gain. */
+    private fun earnBounty(base: Double) { runBounty += base * bountyMultiplier * stats.bountyGain }
     /** Cash pipeline: base x Tribute. */
     private fun earnCash(base: Double) { cash += base * stats.tribute }
 
@@ -266,8 +266,8 @@ class GameEngine(
             x = x, y = y ?: -0.05f,
             speed = prof.speed * WaveRules.speedScale(sw) * stageDef.speedMult.toFloat() * worldH,
             radius = prof.radius * look.size.scale,
-            coins = WaveRules.coinScale(wave) * prof.coin * (if (child) 0.3 else 1.0),
-            cash = WaveRules.cashScale(wave) * prof.coin * (if (child) 0.3 else 1.0),
+            bounty = WaveRules.bountyScale(wave) * prof.bounty * (if (child) 0.3 else 1.0),
+            cash = WaveRules.cashScale(wave) * prof.bounty * (if (child) 0.3 else 1.0),
             isChild = child,
             statWave = sw,
         )
@@ -283,7 +283,7 @@ class GameEngine(
         val m = Mob(
             look, prof, hp, WaveRules.damageScale(wave) * prof.damage * stageDef.damageMult * ENEMY_DAMAGE_SCALE,
             x = 0.5f, y = -0.1f, speed = prof.speed * worldH, radius = prof.radius,
-            coins = WaveRules.bossReward(wave), cash = WaveRules.cashScale(wave) * 25, isBoss = true, statWave = wave,
+            bounty = WaveRules.bossReward(wave), cash = WaveRules.cashScale(wave) * 25, isBoss = true, statWave = wave,
         )
         mobs += m
         bossAlive = true
@@ -476,7 +476,7 @@ class GameEngine(
     private fun kill(m: Mob) {
         m.alive = false
         kills++
-        earnCoins(m.coins)
+        earnBounty(m.bounty)
         earnCash(m.cash)
         addFx(Fx(FxKind.POP, m.x, m.y, m.radius, 0f, 0.25f, Palette.MOB_COLORS[m.look.colorIndex]))
         if (m.isBoss) {
@@ -647,7 +647,7 @@ class GameEngine(
     fun debugAddCash(v: Double) { cash += v }
     fun debugHeal() { health = maxHealth }
 
-    /** Coins earned so far that the host hasn't banked yet. */
+    /** Bounty earned so far that the host hasn't banked yet. */
     private var banked = 0.0
-    fun takeUnbankedCoins(): Double { val d = runCoins - banked; banked = runCoins; return d }
+    fun takeUnbankedBounty(): Double { val d = runBounty - banked; banked = runBounty; return d }
 }

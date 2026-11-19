@@ -22,39 +22,39 @@ data class MobProfile(
     val splits: Boolean = false, // spawns 2 smaller children on death
     val ranged: Boolean = false, // stops at a standoff line and shoots
     val regen: Double = 0.0,     // fraction of max HP regenerated per second
-    val coin: Double = 1.0,      // coin reward multiplier
+    val bounty: Double = 1.0,      // bounty reward multiplier
     val radius: Float = 0.032f,  // fraction of playfield width
 )
 
 object MobProfiles {
     fun of(shape: MobShape): MobProfile = when (shape) {
         MobShape.ELLIPSE -> MobProfile(1.0, 1.0, 0.085f, Movement.STRAIGHT)
-        MobShape.ROUNDED_RECT -> MobProfile(1.8, 1.0, 0.065f, Movement.STRAIGHT, coin = 1.3)
+        MobShape.ROUNDED_RECT -> MobProfile(1.8, 1.0, 0.065f, Movement.STRAIGHT, bounty = 1.3)
         MobShape.PARALLELOGRAM -> MobProfile(0.8, 0.8, 0.11f, Movement.ZIGZAG)
-        MobShape.PENTAGON -> MobProfile(2.2, 1.4, 0.085f, Movement.SINE_WEAVE, coin = 1.6)
-        MobShape.HEXAGON -> MobProfile(2.5, 1.4, 0.07f, Movement.STRAIGHT, shield = 0.6, coin = 1.8)
-        MobShape.TRAPEZOID -> MobProfile(2.0, 0.9, 0.07f, Movement.STRAIGHT, DamageType.RANGED, ranged = true, coin = 1.8)
-        MobShape.RING -> MobProfile(2.4, 1.2, 0.08f, Movement.SINE_WEAVE, splits = true, coin = 1.7)
-        MobShape.CRESCENT -> MobProfile(1.6, 1.6, 0.12f, Movement.ZIGZAG, DamageType.PIERCING, coin = 1.6)
-        MobShape.HEPTAGON -> MobProfile(4.0, 2.2, 0.09f, Movement.DASH_PAUSE, coin = 2.6)
-        MobShape.OCTAGON -> MobProfile(6.0, 2.0, 0.06f, Movement.STRAIGHT, shield = 1.0, coin = 3.0, radius = 0.038f)
-        MobShape.CHEVRON -> MobProfile(2.6, 2.4, 0.15f, Movement.DASH_PAUSE, DamageType.PIERCING, coin = 2.6)
-        MobShape.ARROWHEAD -> MobProfile(2.2, 3.0, 0.17f, Movement.STRAIGHT, DamageType.PIERCING, coin = 2.6)
-        MobShape.CROSS -> MobProfile(3.6, 1.6, 0.07f, Movement.SINE_WEAVE, DamageType.RANGED, ranged = true, coin = 2.8)
-        MobShape.NONAGON -> MobProfile(12.0, 4.0, 0.055f, Movement.STRAIGHT, shield = 1.0, regen = 0.01, coin = 5.0, radius = 0.045f)
-        MobShape.DECAGON -> MobProfile(10.0, 3.5, 0.06f, Movement.SINE_WEAVE, splits = true, coin = 5.0, radius = 0.045f)
-        MobShape.STAR -> MobProfile(6.0, 2.5, 0.1f, Movement.ZIGZAG, DamageType.RANGED, ranged = true, coin = 5.0)
-        MobShape.CLOVER -> MobProfile(8.0, 3.0, 0.08f, Movement.DASH_PAUSE, splits = true, coin = 5.0, radius = 0.042f)
-        MobShape.HEART -> MobProfile(9.0, 3.0, 0.07f, Movement.SINE_WEAVE, regen = 0.04, coin = 5.0, radius = 0.042f)
-        MobShape.YIN_YANG -> MobProfile(25.0, 6.0, 0.08f, Movement.SINE_WEAVE, DamageType.PIERCING, shield = 1.5, regen = 0.02, coin = 12.0, radius = 0.05f)
-        MobShape.SPIRAL -> MobProfile(60.0, 25.0, 0.025f, Movement.STRAIGHT, shield = 0.5, coin = 0.0, radius = 0.11f)
+        MobShape.PENTAGON -> MobProfile(2.2, 1.4, 0.085f, Movement.SINE_WEAVE, bounty = 1.6)
+        MobShape.HEXAGON -> MobProfile(2.5, 1.4, 0.07f, Movement.STRAIGHT, shield = 0.6, bounty = 1.8)
+        MobShape.TRAPEZOID -> MobProfile(2.0, 0.9, 0.07f, Movement.STRAIGHT, DamageType.RANGED, ranged = true, bounty = 1.8)
+        MobShape.RING -> MobProfile(2.4, 1.2, 0.08f, Movement.SINE_WEAVE, splits = true, bounty = 1.7)
+        MobShape.CRESCENT -> MobProfile(1.6, 1.6, 0.12f, Movement.ZIGZAG, DamageType.PIERCING, bounty = 1.6)
+        MobShape.HEPTAGON -> MobProfile(4.0, 2.2, 0.09f, Movement.DASH_PAUSE, bounty = 2.6)
+        MobShape.OCTAGON -> MobProfile(6.0, 2.0, 0.06f, Movement.STRAIGHT, shield = 1.0, bounty = 3.0, radius = 0.038f)
+        MobShape.CHEVRON -> MobProfile(2.6, 2.4, 0.15f, Movement.DASH_PAUSE, DamageType.PIERCING, bounty = 2.6)
+        MobShape.ARROWHEAD -> MobProfile(2.2, 3.0, 0.17f, Movement.STRAIGHT, DamageType.PIERCING, bounty = 2.6)
+        MobShape.CROSS -> MobProfile(3.6, 1.6, 0.07f, Movement.SINE_WEAVE, DamageType.RANGED, ranged = true, bounty = 2.8)
+        MobShape.NONAGON -> MobProfile(12.0, 4.0, 0.055f, Movement.STRAIGHT, shield = 1.0, regen = 0.01, bounty = 5.0, radius = 0.045f)
+        MobShape.DECAGON -> MobProfile(10.0, 3.5, 0.06f, Movement.SINE_WEAVE, splits = true, bounty = 5.0, radius = 0.045f)
+        MobShape.STAR -> MobProfile(6.0, 2.5, 0.1f, Movement.ZIGZAG, DamageType.RANGED, ranged = true, bounty = 5.0)
+        MobShape.CLOVER -> MobProfile(8.0, 3.0, 0.08f, Movement.DASH_PAUSE, splits = true, bounty = 5.0, radius = 0.042f)
+        MobShape.HEART -> MobProfile(9.0, 3.0, 0.07f, Movement.SINE_WEAVE, regen = 0.04, bounty = 5.0, radius = 0.042f)
+        MobShape.YIN_YANG -> MobProfile(25.0, 6.0, 0.08f, Movement.SINE_WEAVE, DamageType.PIERCING, shield = 1.5, regen = 0.02, bounty = 12.0, radius = 0.05f)
+        MobShape.SPIRAL -> MobProfile(60.0, 25.0, 0.025f, Movement.STRAIGHT, shield = 0.5, bounty = 0.0, radius = 0.11f)
     }
 }
 
 /** Wave composition and scaling. Waves are endless; formulas stay finite in Double. */
 object WaveRules {
     const val BOSS_EVERY = 10
-    /** Base coin value of a Spiral Boss before the wave scale. */
+    /** Base bounty value of a Spiral Boss before the wave scale. */
     const val BOSS_BASE_REWARD = 50.0
 
     fun isBossWave(wave: Int) = wave > 0 && wave % BOSS_EVERY == 0
@@ -104,8 +104,8 @@ object WaveRules {
 
     fun speedScale(wave: Int): Float = (1f + wave * 0.004f).coerceAtMost(1.8f)
 
-    /** Coin value of a regular ellipse kill, before multipliers. */
-    fun coinScale(wave: Int): Double = 1.0 + wave * 0.08
+    /** Bounty value of a regular ellipse kill, before multipliers. */
+    fun bountyScale(wave: Int): Double = 1.0 + wave * 0.08
 
     /** In-run cash per ellipse kill. */
     fun cashScale(wave: Int): Double = 2.0 + wave * 0.25

@@ -9,7 +9,7 @@ data class Product(
     val id: String,
     val title: String,
     val listPrice: String,
-    val coinMultiplier: Double,
+    val bountyMultiplier: Double,
     val removesAds: Boolean = false,
 )
 

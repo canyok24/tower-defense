@@ -63,7 +63,7 @@ class DebugMenuActivity : ListScreenActivity() {
         addRow("Complete active research", "${save.activeResearch.size} running", "Complete") { ResearchBay(save).completeAllNow() }
 
         section("BALANCES")
-        addRow("Coins", "%.0f".format(save.coins), "Set") { DebugTools.askNumber(this, "Coins") { save.coins = it; app.persist(); build() } }
+        addRow("Bounty", "%.0f".format(save.bounty), "Set") { DebugTools.askNumber(this, "Bounty") { save.bounty = it; app.persist(); build() } }
         addRow("Diamonds", "${save.diamonds}", "Set") { DebugTools.askNumber(this, "Diamonds") { save.diamonds = it.toLong(); app.persist(); build() } }
         addRow("Research Cores", "${save.cores}", "Set") { DebugTools.askNumber(this, "Cores") { save.cores = it.toLong(); app.persist(); build() } }
         addRow("Best wave", "${save.bestWave}", "Set") { DebugTools.askNumber(this, "Best wave") { save.bestWave = it.toInt(); app.persist(); build() } }

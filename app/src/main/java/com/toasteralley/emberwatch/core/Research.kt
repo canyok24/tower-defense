@@ -11,7 +11,7 @@ private const val MIN = 60_000L
 private const val HOUR = 60 * MIN
 
 /**
- * Research Bay projects. Costs are Coins + Research Cores; durations are real
+ * Research Bay projects. Costs are Bounty + Research Cores; durations are real
  * wall-clock time. [gateWave] is the best wave needed before a project appears.
  */
 enum class ResearchProject(
@@ -27,14 +27,14 @@ enum class ResearchProject(
     LAB_HEALTH("Hull Integrity Research", "+6% hull integrity (max health) per level", 40, 3),
     LAB_ATTACK_SPEED("Rapid Breech", "+3% fire rate per level", 30, 5),
     PROJECTILE_VELOCITY("Projectile Velocity", "+12% shot speed per level (after Light Speed: +3% fire rate per level)", 10, 4),
-    COIN_BONUS("Coin Ledger", "+4% coins per level (multiplies all coin income)", 30, 8),
+    BOUNTY_BONUS("Bounty Ledger", "+4% Bounty per level (multiplies all Bounty income)", 30, 8),
     CORE_YIELD("Core Siphon", "+10% Research Cores per level", 20, 12),
     BAY_EXPANSION("Bay Expansion", "+1 concurrent research slot", 2, 20);
 
-    fun coinCost(level: Int): Double = when (this) {
+    fun bountyCost(level: Int): Double = when (this) {
         LIGHT_SPEED_SHOTS -> 3_000_000.0
         BAY_EXPANSION -> 250_000.0 * 8.0.pow(level)
-        else -> floor(baseCoin() * 1.55.pow(level))
+        else -> floor(baseBounty() * 1.55.pow(level))
     }
 
     fun coreCost(level: Int): Long = when (this) {
@@ -49,15 +49,15 @@ enum class ResearchProject(
         else -> (baseMinutes() * 1.32.pow(level) * MIN).toLong().coerceAtMost(72 * HOUR)
     }
 
-    private fun baseCoin() = when (this) {
+    private fun baseBounty() = when (this) {
         STARTING_CASH -> 400.0; LAB_DAMAGE -> 600.0; LAB_HEALTH -> 600.0
-        LAB_ATTACK_SPEED -> 900.0; PROJECTILE_VELOCITY -> 800.0; COIN_BONUS -> 1500.0
+        LAB_ATTACK_SPEED -> 900.0; PROJECTILE_VELOCITY -> 800.0; BOUNTY_BONUS -> 1500.0
         CORE_YIELD -> 3000.0; else -> 1000.0
     }
 
     private fun baseMinutes() = when (this) {
         STARTING_CASH -> 5.0; LAB_DAMAGE -> 10.0; LAB_HEALTH -> 10.0; LAB_ATTACK_SPEED -> 15.0
-        PROJECTILE_VELOCITY -> 12.0; COIN_BONUS -> 20.0; CORE_YIELD -> 30.0; else -> 10.0
+        PROJECTILE_VELOCITY -> 12.0; BOUNTY_BONUS -> 20.0; CORE_YIELD -> 30.0; else -> 10.0
     }
 
     /** Multiplicative effect (or additive amount for STARTING_CASH / slots). */
@@ -67,7 +67,7 @@ enum class ResearchProject(
         LAB_DAMAGE, LAB_HEALTH -> 1 + 0.06 * level
         LAB_ATTACK_SPEED -> 1 + 0.03 * level
         PROJECTILE_VELOCITY -> 1 + 0.12 * level
-        COIN_BONUS -> 1 + 0.04 * level
+        BOUNTY_BONUS -> 1 + 0.04 * level
         CORE_YIELD -> 1 + 0.10 * level
         BAY_EXPANSION -> level.toDouble()
     }
@@ -95,7 +95,7 @@ class ResearchBay(private val save: SaveData, private val clock: Clock = SystemC
             isActive(p) -> StartResult.Blocked("In progress")
             !gateOpen(p, bypass) -> StartResult.Blocked("Reach wave ${p.gateWave}")
             save.activeResearch.size >= slots -> StartResult.Blocked("All slots busy")
-            save.coins < p.coinCost(lvl) -> StartResult.Blocked("Need coins")
+            save.bounty < p.bountyCost(lvl) -> StartResult.Blocked("Need Bounty")
             save.cores < p.coreCost(lvl) -> StartResult.Blocked("Need cores")
             else -> StartResult.Ok
         }
@@ -105,7 +105,7 @@ class ResearchBay(private val save: SaveData, private val clock: Clock = SystemC
         val r = check(p, bypass)
         if (r != StartResult.Ok) return r
         val lvl = save.level(p)
-        save.coins -= p.coinCost(lvl)
+        save.bounty -= p.bountyCost(lvl)
         save.cores -= p.coreCost(lvl)
         val now = clock.now()
         save.activeResearch += ActiveResearch(p, lvl + 1, now, now + p.durationMs(lvl))

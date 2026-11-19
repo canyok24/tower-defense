@@ -21,7 +21,7 @@ import com.toasteralley.emberwatch.debug.DebugTools
 import com.toasteralley.emberwatch.debug.InGameDebug
 import com.toasteralley.emberwatch.game.GameView
 
-/** One run. Coins are banked into the save every few seconds and on exit. */
+/** One run. Bounty are banked into the save every few seconds and on exit. */
 class GameActivity : AppCompatActivity(), GameView.Listener {
     private val app get() = EmberwatchApp.instance
     private val save get() = app.save
@@ -45,7 +45,7 @@ class GameActivity : AppCompatActivity(), GameView.Listener {
         engine = GameEngine(
             save = save,
             ultimates = UltimateWeapon.entries.associateWith { save.level(it) },
-            coinMultiplier = app.coinMultiplier(),
+            bountyMultiplier = app.bountyMultiplier(),
             coreMultiplier = ResearchProject.CORE_YIELD.effect(save.level(ResearchProject.CORE_YIELD)),
             stage = save.selectedStage,
             enhancementLevel = save.enhancement,
@@ -65,7 +65,7 @@ class GameActivity : AppCompatActivity(), GameView.Listener {
     override fun onPause() { super.onPause(); view.pause(); handler.removeCallbacks(banker); bank() }
 
     private fun bank() {
-        synchronized(engine) { save.coins += engine.takeUnbankedCoins() }
+        synchronized(engine) { save.bounty += engine.takeUnbankedBounty() }
         app.persist()
     }
 
@@ -73,7 +73,7 @@ class GameActivity : AppCompatActivity(), GameView.Listener {
         if (finished) return
         finished = true
         synchronized(engine) {
-            save.coins += engine.takeUnbankedCoins()
+            save.bounty += engine.takeUnbankedBounty()
             save.diamonds += engine.runDiamonds
             save.cores += engine.runCores
             lastReward = RunRewards.applyRunEnd(save, engine.wave, engine.stage)
@@ -88,7 +88,7 @@ class GameActivity : AppCompatActivity(), GameView.Listener {
         endRun()
         lastReward?.takeIf { it.diamonds > 0 || it.cores > 0 }?.let {
             android.widget.Toast.makeText(this, "Stage ${engine.stage} milestones: +${it.diamonds} ◆, +${it.cores} cores" +
-                (if (it.coinBonus > 0) ", +${"%.1f".format(it.coinBonus * 100)}% coins forever" else ""), android.widget.Toast.LENGTH_LONG).show()
+                (if (it.bountyBonus > 0) ", +${"%.1f".format(it.bountyBonus * 100)}% Bounty forever" else ""), android.widget.Toast.LENGTH_LONG).show()
         }
         if (save.runsSinceInterstitial >= 3 && !app.noAds) {
             save.runsSinceInterstitial = 0; app.persist()

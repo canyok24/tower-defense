@@ -8,13 +8,13 @@ enum class WorkshopTab(val label: String) { ASSAULT("ASSAULT"), SHIELD("SHIELD")
 
 /**
  * THE Workshop data table. Every upgrade has:
- *  - a COIN cost curve for permanent levels (bought between runs): coinBase x coinGrowth^permanentLevel
+ *  - a BOUNTY cost curve for permanent levels (bought between runs): bountyBase x bountyGrowth^permanentLevel
  *  - a CASH cost curve for in-run levels (reset each run):      cashBase x cashGrowth^runLevel
  *  - one max level shared by both (permanent + in-run <= maxLevel)
  *  - a gate (best wave reached) before it can be bought either way
  *  - effect formulas below, evaluated at the TOTAL level (permanent + in-run)
  *
- * Max levels keep every cost finite. Damage (max 10,000) uses 25 x 1.14^L coins exactly up to L5000
+ * Max levels keep every cost finite. Damage (max 10,000) uses 25 x 1.14^L bounty exactly up to L5000
  * (~1e286), then x1.008 per level (~1e303 at L10000); its cash curve 15 x 1.16^L softens to x1.03
  * from L2500 (1.16^L alone would overflow a double near L4760). Attack Speed softens after L300.
  */
@@ -23,18 +23,18 @@ enum class Upgrade(
     val label: String,
     val description: String,
     val maxLevel: Int,
-    val coinBase: Double, val coinGrowth: Double,
+    val bountyBase: Double, val bountyGrowth: Double,
     val cashBase: Double, val cashGrowth: Double,
     val gateWave: Int = 0,
     /** Above these levels the curve continues with a softer growth so costs stay finite to max level. */
-    val coinSoftFrom: Int = Int.MAX_VALUE, val coinSoftGrowth: Double = coinGrowth,
+    val bountySoftFrom: Int = Int.MAX_VALUE, val bountySoftGrowth: Double = bountyGrowth,
     val cashSoftFrom: Int = Int.MAX_VALUE, val cashSoftGrowth: Double = cashGrowth,
 ) {
     // ------------------------------------------------------------------ ASSAULT
     DAMAGE(WorkshopTab.ASSAULT, "Damage", "Damage per shot", 10_000, 25.0, 1.14, 15.0, 1.16,
-        coinSoftFrom = 5000, coinSoftGrowth = 1.008, cashSoftFrom = 2500, cashSoftGrowth = 1.03),
+        bountySoftFrom = 5000, bountySoftGrowth = 1.008, cashSoftFrom = 2500, cashSoftGrowth = 1.03),
     ATTACK_SPEED(WorkshopTab.ASSAULT, "Attack Speed", "Shots per second (cap 40/s at L1000)", 1000, 30.0, 1.15, 20.0, 1.18,
-        coinSoftFrom = 300, coinSoftGrowth = 1.05, cashSoftFrom = 300, cashSoftGrowth = 1.06),
+        bountySoftFrom = 300, bountySoftGrowth = 1.05, cashSoftFrom = 300, cashSoftGrowth = 1.06),
     CRIT_CHANCE(WorkshopTab.ASSAULT, "Crit Chance", "Chance for a critical hit (cap 90%)", 90, 60.0, 1.18, 40.0, 1.20, gateWave = 5),
     CRIT_FACTOR(WorkshopTab.ASSAULT, "Crit Factor", "Critical damage multiplier", 175, 50.0, 1.16, 30.0, 1.18, gateWave = 5),
     RANGE(WorkshopTab.ASSAULT, "Range", "Targeting distance from the tower (cap 2.4 at L90)", 90, 40.0, 1.17, 25.0, 1.20),
@@ -46,12 +46,12 @@ enum class Upgrade(
 
     // ------------------------------------------------------------------ SHIELD
     HULL_INTEGRITY(WorkshopTab.SHIELD, "Hull Integrity", "Tower max health", 10_000, 20.0, 1.13, 15.0, 1.15,
-        coinSoftFrom = 5000, coinSoftGrowth = 1.008, cashSoftFrom = 2500, cashSoftGrowth = 1.03),
+        bountySoftFrom = 5000, bountySoftGrowth = 1.008, cashSoftFrom = 2500, cashSoftGrowth = 1.03),
     CORE_REPAIR(WorkshopTab.SHIELD, "Core Repair", "Restores hull per second: 1% of the Hull Integrity value at the same level (ceiling 2.8% of max health/s)", 10_000, 30.0, 1.15, 20.0, 1.18,
-        coinSoftFrom = 4500, coinSoftGrowth = 1.008, cashSoftFrom = 2500, cashSoftGrowth = 1.03),
+        bountySoftFrom = 4500, bountySoftGrowth = 1.008, cashSoftFrom = 2500, cashSoftGrowth = 1.03),
     BARRIER(WorkshopTab.SHIELD, "Barrier", "Damage reduction (cap 75%)", 300, 40.0, 1.16, 30.0, 1.19),
     PLATING(WorkshopTab.SHIELD, "Plating", "Flat damage removed from every hit (after Barrier, min 10% of the hit gets through)", 10_000, 35.0, 1.15, 25.0, 1.18, gateWave = 3,
-        coinSoftFrom = 4500, coinSoftGrowth = 1.008, cashSoftFrom = 2500, cashSoftGrowth = 1.03),
+        bountySoftFrom = 4500, bountySoftGrowth = 1.008, cashSoftFrom = 2500, cashSoftGrowth = 1.03),
     COUNTERFIRE(WorkshopTab.SHIELD, "Counterfire", "Reflects % of damage taken back at the attacker (cap 100%)", 50, 80.0, 1.18, 40.0, 1.20, gateWave = 6),
     DRAIN(WorkshopTab.SHIELD, "Drain", "% of damage dealt heals the tower (cap 5%)", 50, 150.0, 1.20, 70.0, 1.22, gateWave = 10),
     REPULSE(WorkshopTab.SHIELD, "Repulse", "Chance a hit pushes the enemy back up (cap 50%; bosses resist 80%)", 50, 60.0, 1.18, 35.0, 1.20, gateWave = 4),
@@ -63,7 +63,7 @@ enum class Upgrade(
     CHARGES(WorkshopTab.SHIELD, "Charges", "Periodically lays charges in the lane that explode on contact", 80, 250.0, 1.21, 100.0, 1.23, gateWave = 20),
 
     // ------------------------------------------------------------------ LEDGER (exactly 9)
-    BOUNTY(WorkshopTab.LEDGER, "Bounty", "Multiplies ALL coin income: kills, wave rewards, bosses", 100, 100.0, 1.16, 50.0, 1.20),
+    BOUNTY_GAIN(WorkshopTab.LEDGER, "Bounty Gain", "Multiplies ALL Bounty income: kills, wave rewards, bosses", 100, 100.0, 1.16, 50.0, 1.20),
     TRIBUTE(WorkshopTab.LEDGER, "Tribute", "Multiplies ALL cash income: kills and wave rewards", 100, 60.0, 1.15, 30.0, 1.18),
     INTEREST(WorkshopTab.LEDGER, "Interest Per Wave", "Cash interest on held cash after each wave (cap 10%, max 40x wave cash)", 50, 200.0, 1.20, 80.0, 1.22, gateWave = 5),
     FREE_ASSAULT(WorkshopTab.LEDGER, "Free Assault", "Chance an in-run ASSAULT purchase is free (cap 25%)", 50, 250.0, 1.21, 100.0, 1.23, gateWave = 8),
@@ -74,7 +74,7 @@ enum class Upgrade(
     MAX_RECOVERY(WorkshopTab.LEDGER, "Max Recovery", "Cap on the per-wave heal, % of max health (10% -> 100%)", 90, 80.0, 1.17, 40.0, 1.20, gateWave = 3);
 
     /** base x growth^L up to softFrom, then x softGrowth^(L - softFrom). Finite at every L <= maxLevel. */
-    fun coinCost(permanentLevel: Int): Double = curve(coinBase, coinGrowth, coinSoftFrom, coinSoftGrowth, permanentLevel)
+    fun bountyCost(permanentLevel: Int): Double = curve(bountyBase, bountyGrowth, bountySoftFrom, bountySoftGrowth, permanentLevel)
     fun cashCost(runLevel: Int): Double = curve(cashBase, cashGrowth, cashSoftFrom, cashSoftGrowth, runLevel)
     private fun curve(base: Double, g: Double, from: Int, soft: Double, l: Int): Double =
         if (l <= from) floor(base * g.pow(l)) else floor(base * g.pow(from) * soft.pow(l - from))
@@ -104,7 +104,7 @@ enum class Upgrade(
         FORTIFICATION -> (0.05 * l).coerceAtMost(2.0)                                // x tower max health
         RECONSTRUCTION -> (30.0 - 0.4 * l).coerceAtLeast(8.0)                        // seconds to rebuild
         CHARGES -> if (l == 0) 0.0 else (10.0 - 0.1 * l).coerceAtLeast(2.0)    // seconds between mines
-        BOUNTY, TRIBUTE -> 1.0 + 0.03 * l
+        BOUNTY_GAIN, TRIBUTE -> 1.0 + 0.03 * l
         INTEREST -> (0.002 * l).coerceAtMost(0.10)
         FREE_ASSAULT, FREE_SHIELD, FREE_LEDGER -> (0.005 * l).coerceAtMost(0.25)
         ENEMY_DEGRADE -> (0.01 * l).coerceAtMost(0.5)
@@ -134,7 +134,7 @@ enum class Upgrade(
             DAMAGE, HULL_INTEGRITY -> NumberFormat.compact(value(l))
             PLATING -> "-" + NumberFormat.compact(value(l))
             ATTACK_SPEED -> "%.2f/s".format(value(l))
-            CRIT_FACTOR, BOUNTY, TRIBUTE -> "x%.2f".format(value(l))
+            CRIT_FACTOR, BOUNTY_GAIN, TRIBUTE -> "x%.2f".format(value(l))
             RANGE -> "%.2f".format(value(l))
             MULTISHOT -> "${pct(value(l))} +${secondary(l).toInt()}"
             RAPID_FIRE -> pct(value(l)) + " x" + "%.2f".format(secondary(l))
@@ -199,19 +199,19 @@ enum class Upgrade(
     }
 }
 
-/** Permanent workshop purchases (Coins). */
+/** Permanent workshop purchases (Bounty). */
 object Workshop {
     fun gateOpen(u: Upgrade, save: SaveData, bypass: Boolean) = Gates.open(u.gateWave, save, bypass)
 
     fun canBuy(u: Upgrade, save: SaveData, bypass: Boolean): Boolean {
         val l = save.level(u)
-        return gateOpen(u, save, bypass) && l < u.maxLevel && save.coins >= u.coinCost(l)
+        return gateOpen(u, save, bypass) && l < u.maxLevel && save.bounty >= u.bountyCost(l)
     }
 
     fun buy(u: Upgrade, save: SaveData, bypass: Boolean): Boolean {
         if (!canBuy(u, save, bypass)) return false
         val l = save.level(u)
-        save.coins -= u.coinCost(l)
+        save.bounty -= u.bountyCost(l)
         save.workshop[u.name] = l + 1
         return true
     }

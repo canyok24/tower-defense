@@ -34,7 +34,7 @@ class SaveStore(context: Context) {
 
         fun toJson(d: SaveData) = JSONObject().apply {
             put("version", SaveData.CURRENT_VERSION)
-            put("coins", d.coins); put("diamonds", d.diamonds); put("cores", d.cores)
+            put("bounty", d.bounty); put("diamonds", d.diamonds); put("cores", d.cores)
             put("bestWave", d.bestWave); put("totalRuns", d.totalRuns)
             put("selectedStage", d.selectedStage); put("legacyUnlockedStage", d.legacyUnlockedStage)
             put("stageBestWave", JSONObject(d.stageBestWave.mapKeys { it.key.toString() } as Map<*, *>))
@@ -69,13 +69,14 @@ class SaveStore(context: Context) {
             val d = readFields(j)
             val from = j.optInt("version", 1)
             return if (from < SaveData.CURRENT_VERSION) SaveMigrations.migrate(d, from,
-                LegacyFields(unlockedTier = j.optInt("unlockedTier", 1), selectedTier = j.optInt("selectedTier", 1)))
+                LegacyFields(unlockedTier = j.optInt("unlockedTier", 1), selectedTier = j.optInt("selectedTier", 1),
+                    coins = if (j.has("coins")) j.optDouble("coins", 0.0).takeUnless { it.isNaN() } else null))
             else SaveMigrations.clampWorkshop(d)
         }
 
         private fun readFields(j: JSONObject): SaveData = SaveData().apply {
             version = j.optInt("version", 1)
-            coins = j.optDouble("coins", 0.0).let { if (it.isNaN()) 0.0 else it }
+            bounty = j.optDouble("bounty", 0.0).let { if (it.isNaN()) 0.0 else it }   // pre-v5 "coins" handled by SaveMigrations
             diamonds = j.optLong("diamonds"); cores = j.optLong("cores")
             bestWave = j.optInt("bestWave"); totalRuns = j.optInt("totalRuns")
             selectedStage = j.optInt("selectedStage", 1); legacyUnlockedStage = j.optInt("legacyUnlockedStage", 1)
@@ -86,7 +87,7 @@ class SaveStore(context: Context) {
             j.optJSONArray("activeResearch")?.let { arr ->
                 for (i in 0 until arr.length()) {
                     val o = arr.getJSONObject(i)
-                    val p = runCatching { ResearchProject.valueOf(o.getString("p")) }.getOrNull() ?: continue
+                    val p = runCatching { ResearchProject.valueOf(o.getString("p").let { if (it == "COIN_BONUS") "BOUNTY_BONUS" else it }) }.getOrNull() ?: continue
                     activeResearch += ActiveResearch(p, o.getInt("lvl"), o.getLong("start"), o.getLong("end"))
                 }
             }

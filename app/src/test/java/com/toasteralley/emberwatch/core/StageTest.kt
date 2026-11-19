@@ -16,7 +16,7 @@ class StageTest {
             val a = StageDefinitions.ALL[i - 1]; val b = StageDefinitions.ALL[i]
             assertTrue(b.unlockWave >= a.unlockWave)
             assertTrue(b.fullRewardWave > a.fullRewardWave)
-            assertTrue(b.hpMult > a.hpMult && b.damageMult > a.damageMult && b.speedMult > a.speedMult && b.coinMult > a.coinMult)
+            assertTrue(b.hpMult > a.hpMult && b.damageMult > a.damageMult && b.speedMult > a.speedMult && b.bountyMult > a.bountyMult)
             assertTrue("unlock within previous stage's range", b.unlockWave <= a.fullRewardWave)
             assertEquals(b.fullRewardWave, b.milestones.last().wave)
             assertTrue(b.milestones.zipWithNext().all { (x, y) -> y.wave > x.wave })
@@ -48,7 +48,7 @@ class StageTest {
         assertEquals(all.sumOf { it.reward.cores }, s.cores)
         // replaying pays nothing
         assertEquals(0L, Stages.recordWave(s, 1, 10_000).diamonds)
-        assertEquals(all.fold(1.0) { m, x -> m * (1 + x.reward.coinBonus) }, Stages.coinBonus(s), 1e-12)
+        assertEquals(all.fold(1.0) { m, x -> m * (1 + x.reward.bountyBonus) }, Stages.bountyBonus(s), 1e-12)
     }
 
     @Test fun milestonesPaidAlongTheWay() {
@@ -61,7 +61,7 @@ class StageTest {
         assertEquals(0, Stages.best(s, 2))
     }
 
-    @Test fun stageMultipliersApplyToEngineAndCoins() {
+    @Test fun stageMultipliersApplyToEngineAndBounty() {
         val stats = SaveData()
         val e1 = GameEngine(stats, emptyMap(), 1.0, stage = 1, seed = 4)
         val e5 = GameEngine(stats, emptyMap(), 1.0, stage = 5, seed = 4)
@@ -69,6 +69,6 @@ class StageTest {
         assertEquals(m1.maxHp * StageDefinitions.get(5).hpMult, m5.maxHp, 1e-6)
         assertTrue(m5.speed > m1.speed)
         val s = SaveData().apply { selectedStage = 5 }
-        assertEquals(StageDefinitions.get(5).coinMult, CoinMultipliers.total(s, emptySet(), 0), 1e-9)
+        assertEquals(StageDefinitions.get(5).bountyMult, BountyMultipliers.total(s, emptySet(), 0), 1e-9)
     }
 }

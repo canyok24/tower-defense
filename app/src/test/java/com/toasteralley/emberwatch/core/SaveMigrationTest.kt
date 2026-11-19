@@ -7,7 +7,7 @@ import org.junit.Test
 
 class SaveMigrationTest {
     @Test fun v1TiersBecomeStages() {
-        val v1 = SaveData().apply { version = 1; bestWave = 61; coins = 1234.0; diamonds = 30 }
+        val v1 = SaveData().apply { version = 1; bestWave = 61; bounty = 1234.0; diamonds = 30 }
         val m = SaveMigrations.migrate(v1, 1, LegacyFields(unlockedTier = 3, selectedTier = 2))
         assertEquals(SaveData.CURRENT_VERSION, m.version)
         assertEquals(3, m.legacyUnlockedStage)
@@ -16,7 +16,7 @@ class SaveMigrationTest {
         assertEquals(60, Stages.best(m, 1))                  // reached 61 -> cleared 60
         assertEquals(3, Stages.claimed(m, 1))                // milestones 10, 25, 50
         assertEquals(30L + 10 + 15 + 25, m.diamonds)
-        assertEquals(1234.0, m.coins, 0.0)
+        assertEquals(1234.0, m.bounty, 0.0)
     }
 
     @Test fun selectedTierClampedToUnlocked() {
@@ -65,7 +65,7 @@ class WorkshopMigrationTest {
             "WALL_REBUILD" to 12, "LAND_MINES" to 13)
         val s = SaveData().apply { version = 3; workshop.putAll(old); workshop["CRIT_FACTOR"] = 500; workshop["DAMAGE"] = 20 }
         SaveMigrations.migrate(s, 3, LegacyFields())
-        assertEquals(4, SaveData.CURRENT_VERSION); assertEquals(4, s.version)
+        assertEquals(SaveData.CURRENT_VERSION, s.version)
         for ((k, v) in old) assertEquals(k, v, s.level(SaveMigrations.SHIELD_V3_TO_V4.getValue(k)))
         assertEquals(listOf(Upgrade.HULL_INTEGRITY, Upgrade.CORE_REPAIR, Upgrade.BARRIER, Upgrade.PLATING, Upgrade.COUNTERFIRE,
             Upgrade.DRAIN, Upgrade.REPULSE, Upgrade.SATELLITES, Upgrade.PULSE, Upgrade.LAST_STAND, Upgrade.FORTIFICATION,
@@ -83,5 +83,15 @@ class WorkshopMigrationTest {
         val s = SaveData().apply { workshop["CRIT_FACTOR"] = 400; workshop["CRIT_CHANCE"] = 95; workshop["GONE"] = 1 }
         SaveMigrations.clampWorkshop(s)
         assertEquals(175, s.level(Upgrade.CRIT_FACTOR)); assertEquals(90, s.level(Upgrade.CRIT_CHANCE)); assertFalse("GONE" in s.workshop)
+    }
+
+    @Test fun v4CoinsBecomeBounty() {
+        val s = SaveData().apply { version = 4; workshop["BOUNTY"] = 17; research["COIN_BONUS"] = 6 }
+        SaveMigrations.migrate(s, 4, LegacyFields(coins = 98_765.0))
+        assertEquals(SaveData.CURRENT_VERSION, s.version)
+        assertEquals(98_765.0, s.bounty, 0.0)                         // same single currency, no conversion
+        assertEquals(17, s.level(Upgrade.BOUNTY_GAIN)); assertFalse("BOUNTY" in s.workshop)
+        assertEquals(6, s.level(ResearchProject.BOUNTY_BONUS)); assertFalse("COIN_BONUS" in s.research)
+        assertEquals("Bounty Gain", Upgrade.BOUNTY_GAIN.label)
     }
 }

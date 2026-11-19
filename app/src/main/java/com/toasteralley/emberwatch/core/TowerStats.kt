@@ -34,7 +34,7 @@ data class TowerStats(
     val wallMaxHp: Double, val wallRebuildSec: Double, val wallRegenPerSec: Double,
     val mineInterval: Double, val mineDamage: Double,
     // Ledger
-    val bounty: Double, val tribute: Double, val interest: Double,
+    val bountyGain: Double, val tribute: Double, val interest: Double,
     val freeChance: Map<WorkshopTab, Double>,
     val degradeChance: Double, val degradeMaxWaves: Int,
     val recoveryAmount: Double, val maxRecovery: Double,
@@ -114,7 +114,7 @@ data class TowerStats(
                 wallMaxHp = health * v(Upgrade.FORTIFICATION),
                 wallRebuildSec = v(Upgrade.RECONSTRUCTION), wallRegenPerSec = s2(Upgrade.RECONSTRUCTION),
                 mineInterval = v(Upgrade.CHARGES), mineDamage = dmg * s2(Upgrade.CHARGES),
-                bounty = v(Upgrade.BOUNTY), tribute = v(Upgrade.TRIBUTE), interest = v(Upgrade.INTEREST),
+                bountyGain = v(Upgrade.BOUNTY_GAIN), tribute = v(Upgrade.TRIBUTE), interest = v(Upgrade.INTEREST),
                 freeChance = WorkshopTab.entries.associateWith { v(Upgrade.freeUpgradeFor(it)) },
                 degradeChance = v(Upgrade.ENEMY_DEGRADE), degradeMaxWaves = s2(Upgrade.ENEMY_DEGRADE).toInt(),
                 recoveryAmount = v(Upgrade.RECOVERY_AMOUNT), maxRecovery = v(Upgrade.MAX_RECOVERY),

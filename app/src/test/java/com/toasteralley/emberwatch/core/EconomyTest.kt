@@ -14,41 +14,41 @@ class EconomyTest {
     }
 
     @Test fun allPacksStackTo360x() {
-        assertEquals(1.0, CoinMultipliers.packs(emptySet()), 1e-9)
-        assertEquals(1.5, CoinMultipliers.packs(setOf("no_ads")), 1e-9)
-        assertEquals(360.0, CoinMultipliers.packs(Products.IDS.toSet()), 1e-9)
-        assertEquals(1.5 * 10, CoinMultipliers.packs(setOf("no_ads", "pack_tier5")), 1e-9)
+        assertEquals(1.0, BountyMultipliers.packs(emptySet()), 1e-9)
+        assertEquals(1.5, BountyMultipliers.packs(setOf("no_ads")), 1e-9)
+        assertEquals(360.0, BountyMultipliers.packs(Products.IDS.toSet()), 1e-9)
+        assertEquals(1.5 * 10, BountyMultipliers.packs(setOf("no_ads", "pack_tier5")), 1e-9)
     }
 
     @Test fun totalMultiplierStacksEverything() {
         val s = SaveData()
         val now = 1_000_000L
-        assertEquals(360.0, CoinMultipliers.total(s, Products.IDS.toSet(), now), 1e-9)
-        CoinMultipliers.addRewardedChunk(s, now)
-        s.research[ResearchProject.COIN_BONUS.name] = 5
+        assertEquals(360.0, BountyMultipliers.total(s, Products.IDS.toSet(), now), 1e-9)
+        BountyMultipliers.addRewardedChunk(s, now)
+        s.research[ResearchProject.BOUNTY_BONUS.name] = 5
         s.enhancement = 10
-        assertEquals(360.0 * 1.5 * 1.2 * 2.0, CoinMultipliers.total(s, Products.IDS.toSet(), now), 1e-6)
+        assertEquals(360.0 * 1.5 * 1.2 * 2.0, BountyMultipliers.total(s, Products.IDS.toSet(), now), 1e-6)
     }
 
     @Test fun rewardedChunksStackUpToTwoHours() {
         val s = SaveData(); val now = 0L
-        CoinMultipliers.addRewardedChunk(s, now)
+        BountyMultipliers.addRewardedChunk(s, now)
         assertEquals(20 * 60_000L, s.boostUntilMs)
-        repeat(10) { CoinMultipliers.addRewardedChunk(s, now) }
+        repeat(10) { BountyMultipliers.addRewardedChunk(s, now) }
         assertEquals(2 * 3_600_000L, s.boostUntilMs)
-        assertFalse(CoinMultipliers.canAddChunk(s, now))
-        assertTrue(CoinMultipliers.boostActive(s, now + 3_599_000L * 2))
-        assertFalse(CoinMultipliers.boostActive(s, now + 2 * 3_600_000L))
+        assertFalse(BountyMultipliers.canAddChunk(s, now))
+        assertTrue(BountyMultipliers.boostActive(s, now + 3_599_000L * 2))
+        assertFalse(BountyMultipliers.boostActive(s, now + 2 * 3_600_000L))
     }
 
     @Test fun costCurvesAreExponentialAndIncreasing() {
         for (u in Upgrade.entries) {
             for (l in 0 until u.maxLevel) {
-                assertTrue("${u.name} coin L$l", u.coinCost(l + 1) >= u.coinCost(l) && u.coinCost(l).isFinite())
+                assertTrue("${u.name} bounty L$l", u.bountyCost(l + 1) >= u.bountyCost(l) && u.bountyCost(l).isFinite())
                 assertTrue("${u.name} cash L$l", u.cashCost(l + 1) >= u.cashCost(l) && u.cashCost(l).isFinite())
             }
-            assertTrue(u.name, u.coinCost(u.maxLevel).isFinite() && u.cashCost(u.maxLevel).isFinite())
-            assertTrue(u.name, u.coinCost(40) / u.coinCost(30) > 3.0)
+            assertTrue(u.name, u.bountyCost(u.maxLevel).isFinite() && u.cashCost(u.maxLevel).isFinite())
+            assertTrue(u.name, u.bountyCost(40) / u.bountyCost(30) > 3.0)
         }
         for (p in DiamondPerk.entries) for (l in 0 until p.maxLevel) assertTrue(p.cost(l + 1) > p.cost(l))
         for (u in UltimateWeapon.entries) assertEquals(20L, u.cost(0))

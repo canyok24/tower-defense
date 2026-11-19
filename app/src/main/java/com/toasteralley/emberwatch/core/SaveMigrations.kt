@@ -4,6 +4,8 @@ package com.toasteralley.emberwatch.core
 data class LegacyFields(
     val unlockedTier: Int = 1,
     val selectedTier: Int = 1,
+    /** Pre-v5 saves stored the currency under "coins" (now "bounty"). */
+    val coins: Double? = null,
 )
 
 /** Pure save migrations (unit-tested; SaveStore only extracts the raw fields). */
@@ -72,6 +74,14 @@ object SaveMigrations {
                 save.workshop[new.name] = maxOf(save.workshop[new.name] ?: 0, lvl)
             }
             v = 4
+        }
+        if (v < 5) {
+            // v4 -> v5: currency "coins" renamed to Bounty (same single pool, no conversion);
+            // Ledger "Bounty" multiplier renamed to Bounty Gain; Research Bay COIN_BONUS -> BOUNTY_BONUS.
+            legacy.coins?.let { if (save.bounty == 0.0) save.bounty = it }
+            save.workshop.remove("BOUNTY")?.let { save.workshop[Upgrade.BOUNTY_GAIN.name] = maxOf(save.workshop[Upgrade.BOUNTY_GAIN.name] ?: 0, it) }
+            save.research.remove("COIN_BONUS")?.let { save.research[ResearchProject.BOUNTY_BONUS.name] = maxOf(save.research[ResearchProject.BOUNTY_BONUS.name] ?: 0, it) }
+            v = 5
         }
         clampWorkshop(save)
         save.version = SaveData.CURRENT_VERSION

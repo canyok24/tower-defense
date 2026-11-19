@@ -16,7 +16,7 @@ import com.toasteralley.emberwatch.BuildConfig
 import com.toasteralley.emberwatch.EmberwatchApp
 import com.toasteralley.emberwatch.R
 import com.toasteralley.emberwatch.ads.AdManager
-import com.toasteralley.emberwatch.core.CoinMultipliers
+import com.toasteralley.emberwatch.core.BountyMultipliers
 import com.toasteralley.emberwatch.core.DebugGate
 import com.toasteralley.emberwatch.core.Gates
 import com.toasteralley.emberwatch.core.NumberFormat
@@ -95,8 +95,8 @@ class MainMenuActivity : AppCompatActivity() {
         content.addView(label(getString(R.string.menu_subtitle), 15f, Palette.STEEL_LIGHT).apply { gravity = Gravity.CENTER })
         val now = System.currentTimeMillis()
         val boostLeft = (save.boostUntilMs - now).coerceAtLeast(0)
-        content.addView(label("Best wave ${save.bestWave} · Coins ${NumberFormat.compact(save.coins)} · ◆ ${save.diamonds} · Cores ${save.cores}\n" +
-            "Coin multiplier x${NumberFormat.compact(app.displayCoinMultiplier(now))}" + if (boostLeft > 0) " (boost ${NumberFormat.duration(boostLeft)})" else "",
+        content.addView(label("Best wave ${save.bestWave} · Bounty ${NumberFormat.compact(save.bounty)} · ◆ ${save.diamonds} · Cores ${save.cores}\n" +
+            "Bounty multiplier x${NumberFormat.compact(app.displayBountyMultiplier(now))}" + if (boostLeft > 0) " (boost ${NumberFormat.duration(boostLeft)})" else "",
             13f, Palette.TEXT_DIM).apply { gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(12)) })
 
         // stage selector (Stages 1-24, see core/StageDefinitions.kt)
@@ -111,10 +111,10 @@ class MainMenuActivity : AppCompatActivity() {
             addView(emberButton("▶", st < maxStage) { save.selectedStage++; app.persist(); build() })
         })
         val next = Stages.nextMilestone(save, st)
-        val info = StringBuilder("Best cleared: ${Stages.best(save, st)} · HP x${NumberFormat.compact(def.hpMult)} · coins x${NumberFormat.compact(def.coinMult)}\n")
+        val info = StringBuilder("Best cleared: ${Stages.best(save, st)} · HP x${NumberFormat.compact(def.hpMult)} · Bounty x${NumberFormat.compact(def.bountyMult)}\n")
         info.append(if (next == null) "All Stage $st rewards earned" else
             "Next reward at wave ${next.wave}: ◆${next.reward.diamonds}, ${next.reward.cores} cores" +
-                (if (next.reward.coinBonus > 0) ", +${(next.reward.coinBonus * 100).toInt()}% coins" else "") +
+                (if (next.reward.bountyBonus > 0) ", +${(next.reward.bountyBonus * 100).toInt()}% Bounty" else "") +
                 " · full rewards at ${def.fullRewardWave}")
         if (st < StageDefinitions.STAGE_COUNT && !Stages.isUnlocked(save, st + 1, app.bypassGates))
             info.append("\nStage ${st + 1} unlocks after clearing wave ${StageDefinitions.get(st + 1).unlockWave} here")
@@ -135,9 +135,9 @@ class MainMenuActivity : AppCompatActivity() {
         menu("Diamond Perks", Gates.PERKS_WAVE, PerksActivity::class.java)
         menu("Enhancement", Gates.ENHANCEMENT_WAVE, EnhancementActivity::class.java)
         menu("Store", 0, StoreActivity::class.java)
-        content.addView(emberButton("Watch ad: +20 min 1.5x coins", CoinMultipliers.canAddChunk(save, now)) {
+        content.addView(emberButton("Watch ad: +20 min 1.5x Bounty", BountyMultipliers.canAddChunk(save, now)) {
             AdManager.showRewarded(this, onReward = {
-                CoinMultipliers.addRewardedChunk(save, System.currentTimeMillis()); app.persist(); build()
+                BountyMultipliers.addRewardedChunk(save, System.currentTimeMillis()); app.persist(); build()
             }, onUnavailable = { android.widget.Toast.makeText(this, "Ad not ready yet", android.widget.Toast.LENGTH_SHORT).show() })
         }, LinearLayout.LayoutParams(dp(280), ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(18) })
     }

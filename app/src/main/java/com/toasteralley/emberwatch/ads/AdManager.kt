@@ -24,7 +24,7 @@ import com.toasteralley.emberwatch.BuildConfig
  * AdMob facade. Defaults are Google's official TEST ad unit ids (see
  * app/build.gradle.kts); replace them for production. Banner + interstitial are
  * suppressed when the player owns "no_ads". Rewarded ads stay available (they
- * are opt-in) and grant a 20-minute 1.5x coin boost.
+ * are opt-in) and grant a 20-minute 1.5x bounty boost.
  *
  * NOTE: before serving ads in the EEA/UK you must collect consent with Google's
  * User Messaging Platform (UMP) SDK - see README.

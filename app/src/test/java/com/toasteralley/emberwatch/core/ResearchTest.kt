@@ -11,17 +11,17 @@ class ResearchTest {
     @Test fun lightSpeedShotsSpec() {
         val p = ResearchProject.LIGHT_SPEED_SHOTS
         assertEquals(1, p.maxLevel)
-        assertEquals(3_000_000.0, p.coinCost(0), 0.0)
+        assertEquals(3_000_000.0, p.bountyCost(0), 0.0)
         assertEquals(20 * 3_600_000L, p.durationMs(0))
         assertEquals(10, p.gateWave)
     }
 
     @Test fun timerCompletesOnWallClock() {
         val clock = FakeClock()
-        val s = SaveData().apply { coins = 5_000_000.0; cores = 100; bestWave = 10 }
+        val s = SaveData().apply { bounty = 5_000_000.0; cores = 100; bestWave = 10 }
         val bay = ResearchBay(s, clock)
         assertEquals(ResearchBay.StartResult.Ok, bay.start(ResearchProject.LIGHT_SPEED_SHOTS))
-        assertEquals(2_000_000.0, s.coins, 0.0)
+        assertEquals(2_000_000.0, s.bounty, 0.0)
         clock.t += 19 * 3_600_000L
         assertTrue(bay.tick().isEmpty())
         assertEquals(0, s.level(ResearchProject.LIGHT_SPEED_SHOTS))
@@ -33,7 +33,7 @@ class ResearchTest {
 
     @Test fun gatesSlotsAndBypass() {
         val clock = FakeClock()
-        val s = SaveData().apply { coins = 1e9; cores = 1000; bestWave = 0 }
+        val s = SaveData().apply { bounty = 1e9; cores = 1000; bestWave = 0 }
         val bay = ResearchBay(s, clock)
         assertTrue(bay.check(ResearchProject.LIGHT_SPEED_SHOTS) is ResearchBay.StartResult.Blocked)
         assertEquals(ResearchBay.StartResult.Ok, bay.check(ResearchProject.LIGHT_SPEED_SHOTS, bypass = true))

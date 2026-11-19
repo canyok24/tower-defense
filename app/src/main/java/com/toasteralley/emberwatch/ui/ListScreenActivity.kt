@@ -64,7 +64,7 @@ abstract class ListScreenActivity : AppCompatActivity() {
             addView(label("  $screenTitle", 22f, Palette.CORAL, bold = true).apply { gravity = android.view.Gravity.CENTER_VERTICAL },
                 LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
         })
-        header.addView(label("Coins ${NumberFormat.compact(save.coins)}   ◆ ${save.diamonds}   Cores ${save.cores}   Best wave ${save.bestWave}",
+        header.addView(label("Bounty ${NumberFormat.compact(save.bounty)}   ◆ ${save.diamonds}   Cores ${save.cores}   Best wave ${save.bestWave}",
             13f, Palette.STEEL_LIGHT).apply { setPadding(0, dp(8), 0, dp(4)) })
         list.removeAllViews()
         buildRows()

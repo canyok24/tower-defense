@@ -7,8 +7,8 @@ import kotlin.math.roundToInt
 data class StageReward(
     val diamonds: Long,
     val cores: Long,
-    /** Permanent coin bonus as a fraction (0.02 = x1.02), stacked multiplicatively. */
-    val coinBonus: Double,
+    /** Permanent bounty bonus as a fraction (0.02 = x1.02), stacked multiplicatively. */
+    val bountyBonus: Double,
 )
 
 data class StageMilestone(val wave: Int, val reward: StageReward)
@@ -25,7 +25,7 @@ data class StageDef(
     val hpMult: Double,
     val damageMult: Double,
     val speedMult: Double,
-    val coinMult: Double,
+    val bountyMult: Double,
     val milestones: List<StageMilestone>,
 )
 
@@ -36,12 +36,12 @@ data class StageDef(
  *  fullRewardWave(n) = 10,000 + 2,500 x (n-1)                (stage 1: 10,000 ... stage 24: 67,500)
  *  hpMult(n)         = 4^(n-1)       damageMult(n) = 3^(n-1)
  *  speedMult(n)      = 1 + 0.03 x (n-1)                      (stage 24: x1.69)
- *  coinMult(n)       = 2.2^(n-1)                             (stage 24: ~7.4e7)
+ *  bountyMult(n)       = 2.2^(n-1)                             (stage 24: ~7.4e7)
  *
  * Milestones: 11 per stage at these fractions of fullRewardWave
  *   (10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 7500, 10000) / 10,000
  * i.e. Stage 1 pays at waves 10, 25, 50, ... 10,000; the last one completes the stage.
- * Rewards scale by (1 + 0.5 x (n-1)) per stage; coin bonuses are the same each stage
+ * Rewards scale by (1 + 0.5 x (n-1)) per stage; bounty bonuses are the same each stage
  * (+14.4% per fully completed stage, ~x25 across all 24).
  */
 object StageDefinitions {
@@ -52,7 +52,7 @@ object StageDefinitions {
     private val MILESTONE_FRACTIONS = intArrayOf(10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 7500, 10000)
     private val BASE_DIAMONDS = longArrayOf(10, 15, 25, 40, 60, 100, 150, 250, 400, 500, 1000)
     private val BASE_CORES = longArrayOf(2, 4, 6, 10, 20, 35, 50, 80, 120, 160, 300)
-    private val COIN_BONUS = doubleArrayOf(0.0, 0.0, 0.0, 0.01, 0.01, 0.01, 0.02, 0.02, 0.02, 0.02, 0.03)
+    private val BOUNTY_BONUS = doubleArrayOf(0.0, 0.0, 0.0, 0.01, 0.01, 0.01, 0.02, 0.02, 0.02, 0.02, 0.03)
 
     private fun round50(v: Double) = ((v / 50).roundToInt() * 50).coerceAtLeast(50)
 
@@ -66,11 +66,11 @@ object StageDefinitions {
             hpMult = 4.0.pow(n - 1),
             damageMult = 3.0.pow(n - 1),
             speedMult = 1 + 0.03 * (n - 1),
-            coinMult = 2.2.pow(n - 1),
+            bountyMult = 2.2.pow(n - 1),
             milestones = MILESTONE_FRACTIONS.indices.map { i ->
                 StageMilestone(
                     wave = (full.toLong() * MILESTONE_FRACTIONS[i] / 10_000).toInt(),
-                    reward = StageReward((BASE_DIAMONDS[i] * scale).toLong(), (BASE_CORES[i] * scale).toLong(), COIN_BONUS[i]),
+                    reward = StageReward((BASE_DIAMONDS[i] * scale).toLong(), (BASE_CORES[i] * scale).toLong(), BOUNTY_BONUS[i]),
                 )
             },
         )
@@ -100,10 +100,10 @@ object Stages {
     fun isComplete(save: SaveData, n: Int) = claimed(save, n) >= StageDefinitions.get(n).milestones.size
     fun nextMilestone(save: SaveData, n: Int): StageMilestone? = StageDefinitions.get(n).milestones.getOrNull(claimed(save, n))
 
-    /** Product of every claimed milestone coin bonus across all stages. */
-    fun coinBonus(save: SaveData): Double {
+    /** Product of every claimed milestone bounty bonus across all stages. */
+    fun bountyBonus(save: SaveData): Double {
         var m = 1.0
-        for (def in StageDefinitions.ALL) for (i in 0 until claimed(save, def.number)) m *= 1 + def.milestones[i].reward.coinBonus
+        for (def in StageDefinitions.ALL) for (i in 0 until claimed(save, def.number)) m *= 1 + def.milestones[i].reward.bountyBonus
         return m
     }
 
@@ -118,7 +118,7 @@ object Stages {
         var idx = claimed(save, n)
         while (idx < def.milestones.size && def.milestones[idx].wave <= best(save, n)) {
             val r = def.milestones[idx].reward
-            d += r.diamonds; c += r.cores; bonus *= 1 + r.coinBonus
+            d += r.diamonds; c += r.cores; bonus *= 1 + r.bountyBonus
             idx++
         }
         save.stageMilestonesClaimed[n] = idx

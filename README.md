@@ -11,10 +11,10 @@ Package: `com.toasteralley.emberwatch` · minSdk 24 · target/compile SDK 35 · 
 **Core loop**
 - One tower anchored at the bottom centre, mobs spawn at the top and descend. Portrait only, tuned for tall phones (Galaxy S25 Ultra, about 19.5:9). The status bar, display cutout and gesture-nav insets are all handled.
 - Waves never end. Each wave is timed: mobs spawn over 16 s, then the next wave starts once the field is clear or 10 s have passed.
-- **Spiral Boss every 10 waves.** It's the biggest mob in the game: radius 0.11 of the screen width, against 0.0625 for the largest normal mob (a LARGE yin-yang). It's also the slowest, has 60x base HP (growing a further +1% per wave) and a shield, and hits hard at the wall. Its coin reward is `50 × (wave ÷ 10)`, times the full coin multiplier. Those coins are banked into the same balance that pays for Workshop upgrades and Research Bay projects. Killing it also drops Diamonds and Research Cores. The Spiral is never part of the normal-mob pool.
+- **Spiral Boss every 10 waves.** It's the biggest mob in the game: radius 0.11 of the screen width, against 0.0625 for the largest normal mob (a LARGE yin-yang). It's also the slowest, has 60x base HP (growing a further +1% per wave) and a shield, and hits hard at the wall. Its Bounty reward is `50 × (wave ÷ 10)`, times the full Bounty multiplier. That Bounty is banked into the same balance that pays for Workshop upgrades and Research Bay projects. Killing it also drops Diamonds and Research Cores. The Spiral is never part of the normal-mob pool.
 - During a run you earn **Cash** and spend it on run-only upgrades (ATK / RATE / HP). Cash resets every run.
 - Speed button: 1x / 2x / 3x / 5x. The simulation always uses fixed 1/60 s steps, and higher speeds just run more steps per frame.
-- **24 Stages**, chosen on the main menu. Each stage raises mob HP, damage and speed, pays a bigger coin multiplier, keeps its own best wave, and has its own milestone reward table. See [Stages](#stages).
+- **24 Stages**, chosen on the main menu. Each stage raises mob HP, damage and speed, pays a bigger Bounty multiplier, keeps its own best wave, and has its own milestone reward table. See [Stages](#stages).
 
 **Mobs: simple shapes, difficulty comes from behaviour**
 - There are 20 shapes, each a cached unit-size `Path`: pentagon, hexagon, heptagon, octagon, nonagon, decagon, star, crescent, cross, arrowhead, chevron, parallelogram, trapezoid, ellipse, rounded rectangle, ring, heart, clover, yin-yang and spiral. Circle, square, triangle and diamond are never used, and a unit test enforces this.
@@ -54,7 +54,7 @@ Package: `com.toasteralley.emberwatch` · minSdk 24 · target/compile SDK 35 · 
 **Tower stats:** health, attack, defense (damage reduction %), attack speed, crit chance and crit factor, plus super crits from Diamond Perks.
 
 **Progression menus (each is its own screen)**
-1. **Workshop.** Three tabs, ASSAULT (10 upgrades), SHIELD (13) and LEDGER (9). Coins buy permanent levels between runs; Cash buys temporary levels of the same upgrades during a run. See [Workshop](#workshop-assault--shield--ledger).
+1. **Workshop.** Three tabs, ASSAULT (10 upgrades), SHIELD (13) and LEDGER (9). Bounty buys permanent levels between runs; Cash buys temporary levels of the same upgrades during a run. See [Workshop](#workshop-assault--shield--ledger).
 2. **Ultimate Weapons.** Unlocked and upgraded with Diamonds, opening at wave 20. They fire automatically on a cooldown during a run:
    - Ember Nova: area damage near the wall
    - Frost Lattice: slows every mob on the field
@@ -62,20 +62,20 @@ Package: `com.toasteralley.emberwatch` · minSdk 24 · target/compile SDK 35 · 
    - Gravity Well: drags mobs back toward the top and damages them
 3. **Diamond Perks.** Paid with Diamonds, opening at wave 15: damage multiplier, health multiplier, crit-rate multiplier, critical factor, advanced crit rate, advanced crit factor, and super crits (a chance to crit again on a crit, with its own factor).
 4. **Enhancement.** One global multiplier that applies on top of every other window. It opens at wave 30, is capped at **level 1,000**, and is very expensive. See the formula and cost curve below.
-5. **Research Bay.** Its own currency (Research Cores) plus Coins. Timers run on the real wall clock and keep going while the app is closed. Projects are gated by best wave, and 2 run at once (Bay Expansion research raises this to 4).
-   - **Light Speed Shots** is the flagship project: a single level costing 3,000,000 coins + 50 cores and 20 hours, unlocked at best wave 10. Shots hit instantly as a hitscan beam, and Projectile Velocity research turns into pure fire rate (+3% per level).
-   - The other projects are Starting Cash, Ember Rounds (damage), Wall Plating (health), Rapid Breech (fire rate), Projectile Velocity, Coin Ledger (coin bonus), Core Siphon (core yield) and Bay Expansion.
-6. **Coin multipliers.** Owned packs, a 1.5x rewarded-ad boost, Coin Ledger research, the Enhancement multiplier, the selected Stage's coin multiplier and your permanent Stage milestone coin bonuses all multiply together and apply to every coin source: kills, wave bonuses and boss rewards. A rewarded ad adds 20 minutes of 1.5x, stacking up to 2 hours on the wall clock and saved across restarts. Starting Cash research raises your opening run cash.
+5. **Research Bay.** Its own currency (Research Cores) plus Bounty. Timers run on the real wall clock and keep going while the app is closed. Projects are gated by best wave, and 2 run at once (Bay Expansion research raises this to 4).
+   - **Light Speed Shots** is the flagship project: a single level costing 3,000,000 Bounty + 50 cores and 20 hours, unlocked at best wave 10. Shots hit instantly as a hitscan beam, and Projectile Velocity research turns into pure fire rate (+3% per level).
+   - The other projects are Starting Cash, Ember Rounds (damage), Hull Integrity Research (health), Rapid Breech (fire rate), Projectile Velocity, Bounty Ledger (Bounty bonus), Core Siphon (core yield) and Bay Expansion.
+6. **Bounty multipliers.** Owned packs, a 1.5x rewarded-ad boost, Bounty Ledger research, the Enhancement multiplier, the selected Stage's Bounty multiplier and your permanent Stage milestone Bounty bonuses all multiply together and apply to every Bounty source: kills, wave bonuses and boss rewards. A rewarded ad adds 20 minutes of 1.5x, stacking up to 2 hours on the wall clock and saved across restarts. Starting Cash research raises your opening run cash.
 
 **Store (Google Play Billing, one-time non-consumables)**
 
 | Product id   | Suggested price | Effect |
 |--------------|-----------------|--------|
-| `no_ads`     | $4.99   | 1.5x coins forever + removes banner & interstitial ads |
-| `pack_epic`  | $19.99  | 2x coins |
-| `pack_tier3` | $39.99  | 3x coins |
-| `pack_tier4` | $149.99 | 4x coins |
-| `pack_tier5` | $499.99 | 10x coins |
+| `no_ads`     | $4.99   | 1.5x Bounty forever + removes banner & interstitial ads |
+| `pack_epic`  | $19.99  | 2x Bounty |
+| `pack_tier3` | $39.99  | 3x Bounty |
+| `pack_tier4` | $149.99 | 4x Bounty |
+| `pack_tier5` | $499.99 | 10x Bounty |
 
 The top pack is shown as $499.99 here and as the fallback label in the app. If you'd rather charge a flat $500, set it to **$500.00** in Play Console. The app always shows Play's localized price, so no code change is needed.
 
@@ -91,7 +91,7 @@ P = ln(50 / 1.05^20) / ln(100) ≈ 0.6376  → multiplier(1000) = 100 exactly
 ```
 Sample values: L10 = 2.00, L20 = 3.11, L50 = 5.86, L100 = 9.57, L500 = 39.5, L1000 = 100. The formula is defined past the cap (L6000 ≈ 41,000x) for future releases.
 
-**Cost curve** (coins to buy the next level, `Enhancement.cost`). Steep but finite:
+**Cost curve** (Bounty to buy the next level, `Enhancement.cost`). Steep but finite:
 ```
 L < 100 : 25,000 × 1.09^L
 L ≥ 100 : cost(100) × 1.035^(L − 100)     (≈ 31x more per 100 levels)
@@ -106,7 +106,7 @@ L ≥ 100 : cost(100) × 1.035^(L − 100)     (≈ 31x more per 100 levels)
 
 The total cost from 0 to 1,000 is about 1.1e23. Even L5000 (about 4e81) is still a finite Double.
 
-**Number formatting** (`NumberFormat.compact`): K, M, B, T, then two-letter suffixes aa (1e15), ab (1e18), ac (1e21) … az, ba … zz (up to 1e2043). Every finite Double formats, for example "3.73ac". The multiplier applies to health, damage, the bonus part of the crit and super-crit factors, ultimate-weapon damage (which scales with attack) and all coin income. It does not apply to probability stats (defense, crit chance) or fire rate, which stay inside their caps.
+**Number formatting** (`NumberFormat.compact`): K, M, B, T, then two-letter suffixes aa (1e15), ab (1e18), ac (1e21) … az, ba … zz (up to 1e2043). Every finite Double formats, for example "3.73ac". The multiplier applies to health, damage, the bonus part of the crit and super-crit factors, ultimate-weapon damage (which scales with attack) and all Bounty income. It does not apply to probability stats (defense, crit chance) or fire rate, which stay inside their caps.
 
 ---
 
@@ -115,7 +115,7 @@ The total cost from 0 to 1,000 is about 1.1e23. Even L5000 (about 4e81) is still
 app/src/main/java/com/toasteralley/emberwatch/
   core/      pure Kotlin (unit-tested): shapes, behaviours, wave rules, GameEngine,
              WorkshopDefinitions (all 3 tabs), StageDefinitions, Perks/Ultimates/
-             Enhancement/Research formulas, coin multipliers, save migrations,
+             Enhancement/Research formulas, Bounty multipliers, save migrations,
              Products, SaveData, DebugGate + SecretGesture
   game/      GameView (SurfaceView loop + rendering + input), ShapeRenderer (Path cache)
   ui/        main menu, game screen, the progression screens, Store, Settings
@@ -187,13 +187,13 @@ Outputs:
 
 A hidden developer/admin menu for testing progression without grinding.
 
-**It exists only in debug builds.** The menu code (`DebugTools`, `DebugMenuActivity`) lives in `app/src/debug/`, and its activity is declared in the debug-only manifest. Release builds compile a no-op stub from `app/src/release/`, and every entry point is also gated on `BuildConfig.DEBUG` through `core.DebugGate`. Saved debug flags (god mode, bypass gates, start wave) are ignored in release builds, and debug store grants are never loaded there. This matters because the menu can grant the paid coin multipliers for free.
+**It exists only in debug builds.** The menu code (`DebugTools`, `DebugMenuActivity`) lives in `app/src/debug/`, and its activity is declared in the debug-only manifest. Release builds compile a no-op stub from `app/src/release/`, and every entry point is also gated on `BuildConfig.DEBUG` through `core.DebugGate`. Saved debug flags (god mode, bypass gates, start wave) are ignored in release builds, and debug store grants are never loaded there. This matters because the menu can grant the paid Bounty multipliers for free.
 
 **How to open it (debug build):**
 - **Main menu:** press and hold the gear icon (top right) for **at least 2 seconds** and release. Then, within 10 seconds, tap the **EMBERWATCH** title **5 times within 3 seconds**.
 - **In a run:** hold the **II** (pause) button for 2 seconds and release. Then tap the **WAVE** label at top left 5 times within 3 seconds.
 
-**Main-menu override:** bypass all progression gates (menus, research gates, stages); unlock all 24 stages (access only, no rewards); **set the Enhancement level to anything from 0 to 100,000, even above the cap**, to test the enemy pools (for example 1500 adds dangerous shapes, 6000 adds everything); set the selected stage's best cleared wave (this pays its milestones); max all research or unlock only Light Speed Shots; unlock all Ultimate Weapons; max all Diamond Perks; complete running research timers now; set Coins, Diamonds, Research Cores and best wave; start the next run at wave N; god mode; locally grant or revoke any store pack (not a real purchase).
+**Main-menu override:** bypass all progression gates (menus, research gates, stages); unlock all 24 stages (access only, no rewards); **set the Enhancement level to anything from 0 to 100,000, even above the cap**, to test the enemy pools (for example 1500 adds dangerous shapes, 6000 adds everything); set the selected stage's best cleared wave (this pays its milestones); max all research or unlock only Light Speed Shots; unlock all Ultimate Weapons; max all Diamond Perks; complete running research timers now; set Bounty, Diamonds, Research Cores and best wave; start the next run at wave N; god mode; locally grant or revoke any store pack (not a real purchase).
 
 **Workshop override (main menu):** set any upgrade in any tab to any level (0..max), max one tab, max all three tabs, or reset the workshop.
 
@@ -205,13 +205,13 @@ A hidden developer/admin menu for testing progression without grinding.
 
 The Workshop is split into three tabs, the same way in the main menu and in the run.
 
-- **Between runs, Coins buy permanent levels.**
+- **Between runs, Bounty buyss permanent levels.**
 - **During a run, Cash buys temporary in-run levels of the same upgrades.** The in-run panel (bottom of the screen) has the same three tabs, pages through each tab 6 at a time, and shows `Lv permanent+run`, the current effect and the Cash price. In-run levels reset when the run ends and stack on top of permanent levels; the effect is evaluated at the **total** level, and permanent + in-run can never exceed the upgrade's max level.
-- Every upgrade's coin cost curve, cash cost curve, max level, gate and effect formula live in one data file: `core/WorkshopDefinitions.kt`. Costs are `floor(base × growth^level)` — the coin curve uses the permanent level, the cash curve uses the in-run level. All curves are monotonic and finite up to max level. Where `growth^L` would overflow a double before max level, the curve keeps the original exponential exactly up to a threshold and continues with a softer per-level growth (see the cost columns): Damage coins exact to L5000 (~1e286, ~1e303 at L10,000), Damage cash exact to L2500; Hull Integrity coins exact to L5000, cash to L2500; Core Repair coins exact to L4500, cash to L2500; Plating coins exact to L4500, cash to L2500; Attack Speed softens after L300.
+- Every upgrade's Bounty cost curve, cash cost curve, max level, gate and effect formula live in one data file: `core/WorkshopDefinitions.kt`. Costs are `floor(base × growth^level)` — the Bounty curve uses the permanent level, the cash curve uses the in-run level. All curves are monotonic and finite up to max level. Where `growth^L` would overflow a double before max level, the curve keeps the original exponential exactly up to a threshold and continues with a softer per-level growth (see the cost columns): Damage Bounty exact to L5000 (~1e286, ~1e303 at L10,000), Damage cash exact to L2500; Hull Integrity Bounty exact to L5000, cash to L2500; Core Repair Bounty exact to L4500, cash to L2500; Plating Bounty exact to L4500, cash to L2500; Attack Speed softens after L300.
 - Gates use your best wave reached (bypassed by the debug override).
-- Enhancement still multiplies damage, health and coin income on top. **Bounty** is a separate multiplicative factor in the coin pipeline (`coins = base × packs × boost × research × enhancement × stage × Bounty`), **Tribute** a separate factor in the cash pipeline (`cash = base × Tribute`). Menus show the coin multiplier including your permanent Bounty.
+- Enhancement still multiplies damage, health and Bounty income on top. **Bounty Gain** is a separate multiplicative factor in the Bounty pipeline (`bounty = base × packs × boost × research × enhancement × stage × Bounty Gain`), **Tribute** a separate factor in the cash pipeline (`cash = base × Tribute`). Menus show the Bounty multiplier including your permanent Bounty Gain.
 - **Super Crit** combines multiplicatively with the Diamond Perk super crit: chance `1 − (1 − perk)(1 − workshop)`, factor `perkFactor × workshopFactor`.
-- **Enemy Degrade Chance** works like the classic "skip a level" upgrade in reverse: each spawning enemy has the shown chance to be built with the stats (HP, damage, speed, veteran traits) of a wave **1..N waves lower**, N = `1 + l/10` (6 at max). Coin and cash rewards still use the current wave. Bosses are never degraded.
+- **Enemy Degrade Chance** works like the classic "skip a level" upgrade in reverse: each spawning enemy has the shown chance to be built with the stats (HP, damage, speed, veteran traits) of a wave **1..N waves lower**, N = `1 + l/10` (6 at max). Bounty and cash rewards still use the current wave. Bosses are never degraded.
 - **Damage order on the tower:** Barrier → Plating (at least 10% of the hit always gets through) → Counterfire reflect (% of the raw hit) → Fortification absorbs → Last Stand (lethal hit: survive at 1% HP, "LAST STAND" popup) → Hull Integrity.
 - **Fortification:** with Fortification > 0, a steel bar sits just above the tower. Contact enemies stop at it and it absorbs all damage (contact and ranged) until it falls; it regenerates slowly and rebuilds after Reconstruction seconds.
 - **Recovery:** after each wave the tower heals `min(Recovery Amount, Max Recovery) × max HP`.
@@ -226,7 +226,7 @@ The Workshop is split into three tabs, the same way in the main menu and in the 
 
 ### ASSAULT (10)
 
-| Upgrade | Effect | Formula at total level `l` | Max | Coin cost (perm L) | Cash cost (run L) | Gate |
+| Upgrade | Effect | Formula at total level `l` | Max | Bounty cost (perm L) | Cash cost (run L) | Gate |
 |---|---|---|---|---|---|---|
 | **Damage** | Damage per shot | `10.0 * (1 + 0.25 * l) * 1.012.pow(l)` | 10,000 | 25 × 1.14^L, ×1.008/level after L5000 | 15 × 1.16^L, ×1.03/level after L2500 | — |
 | **Attack Speed** | Shots per second (cap 40/s at L1000) | `(1.0 + 0.039 * l).coerceAtMost(MAX_WORKSHOP_FIRE_RATE)` | 1000 | 30 × 1.15^L, ×1.05/level after L300 | 20 × 1.18^L, ×1.06/level after L300 | — |
@@ -241,7 +241,7 @@ The Workshop is split into three tabs, the same way in the main menu and in the 
 
 ### SHIELD (13)
 
-| Upgrade | Effect | Formula at total level `l` | Max | Coin cost (perm L) | Cash cost (run L) | Gate |
+| Upgrade | Effect | Formula at total level `l` | Max | Bounty cost (perm L) | Cash cost (run L) | Gate |
 |---|---|---|---|---|---|---|
 | **Hull Integrity** | Tower max health | `hullIntegrity(l)` | 10,000 | 20 × 1.13^L, ×1.008/level after L5000 | 15 × 1.15^L, ×1.03/level after L2500 | — |
 | **Core Repair** | Restores hull per second: 1% of the Hull Integrity value at the same level (ceiling 2.8% of max health/s) | `0.01 × hullIntegrity(l)` HP/s (0 at L0), effective `min(that, 0.028 × maxHP)` | 10,000 | 30 × 1.15^L, ×1.008/level after L4500 | 20 × 1.18^L, ×1.03/level after L2500 | — |
@@ -259,9 +259,9 @@ The Workshop is split into three tabs, the same way in the main menu and in the 
 
 ### LEDGER (8)
 
-| Upgrade | Effect | Formula at total level `l` | Max | Coin cost (perm L) | Cash cost (run L) | Gate |
+| Upgrade | Effect | Formula at total level `l` | Max | Bounty cost (perm L) | Cash cost (run L) | Gate |
 |---|---|---|---|---|---|---|
-| **Bounty** | Multiplies ALL coin income: kills, wave rewards, bosses | `1.0 + 0.03 * l` | 100 | 100 × 1.16^L | 50 × 1.20^L | — |
+| **Bounty Gain** | Multiplies ALL Bounty income: kills, wave rewards, bosses | `1.0 + 0.03 * l` | 100 | 100 × 1.16^L | 50 × 1.20^L | — |
 | **Tribute** | Multiplies ALL cash income: kills and wave rewards | `1.0 + 0.03 * l` | 100 | 60 × 1.15^L | 30 × 1.18^L | — |
 | **Interest Per Wave** | Cash interest on held cash after each wave (cap 10%, max 40x wave cash) | `(0.002 * l).coerceAtMost(0.10)` | 50 | 200 × 1.20^L | 80 × 1.22^L | wave 5 |
 | **Free Assault** | Chance an in-run ASSAULT purchase is free (cap 25%) | `(0.005 * l).coerceAtMost(0.25)` | 50 | 250 × 1.21^L | 100 × 1.23^L | wave 8 |
@@ -285,7 +285,7 @@ All stage tuning lives in **`app/src/main/java/com/toasteralley/emberwatch/core/
 | Mob HP | 4^(n−1) | ×1 | ×4 | ×4.2M | ×7.0e13 |
 | Mob damage | 3^(n−1) | ×1 | ×3 | ×177K | ×9.4e10 |
 | Mob speed | 1 + 0.03 × (n−1) | ×1.00 | ×1.03 | ×1.33 | ×1.69 |
-| Coin multiplier | 2.2^(n−1) | ×1 | ×2.2 | ×5,840 | ×7.5e7 |
+| Bounty multiplier | 2.2^(n−1) | ×1 | ×2.2 | ×5,840 | ×7.5e7 |
 
 All unlock requirements, stages 2–24: 500, 600, 650, 750, 850, 1000, 1150, 1350, 1550, 1750, 2000, 2350, 2700, 3100, 3550, 4050, 4700, 5400, 6200, 7100, 8200, 9400, 10800.
 
@@ -295,10 +295,10 @@ All unlock requirements, stages 2–24: 500, 600, 650, 750, 850, 1000, 1150, 135
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | Diamonds (Stage 1) | 10 | 15 | 25 | 40 | 60 | 100 | 150 | 250 | 400 | 500 | 1000 |
 | Research Cores (Stage 1) | 2 | 4 | 6 | 10 | 20 | 35 | 50 | 80 | 120 | 160 | 300 |
-| Permanent coin bonus | – | – | – | +1% | +1% | +1% | +2% | +2% | +2% | +2% | +3% |
+| Permanent Bounty bonus | – | – | – | +1% | +1% | +1% | +2% | +2% | +2% | +2% | +3% |
 
 - Diamond and core rewards scale by ×(1 + 0.5 × (n−1)) per stage, so Stage 24 pays 12.5x.
-- Coin bonuses are permanent, multiply together and apply on every stage. That's ×1.144 per completed stage and about ×25 if you complete all 24.
+- Bounty bonuses are permanent, multiply together and apply on every stage. That's ×1.144 per completed stage and about ×25 if you complete all 24.
 - Rewards are paid in order, once each, when a run ends: the stage records waves *cleared* (the wave you were on when the wall fell doesn't count).
 - The menu gates (Workshop crit at wave 5, Perks 15, UW 20, Enhancement 30, research gates) still use your best wave reached on any stage.
 
@@ -319,20 +319,20 @@ All unlock requirements, stages 2–24: 500, 600, 650, 750, 850, 1000, 1150, 135
 | after that | 6,000+ | boss-level and yin-yang join at L5,001 |
 | long-term | toward 100,000 via periodic updates | |
 
-Before each cap bump, re-check the cost curve (`Enhancement.cost`) against the coin income at that stage.
+Before each cap bump, re-check the cost curve (`Enhancement.cost`) against the Bounty income at that stage.
 
 ## Tests
 `./gradlew testDebugUnitTest` covers:
 - the Enhancement formula (2.0 at L10, 100 at L1000, monotonic, milestone jumps), the cap of 1,000, and a cost curve that stays finite and increasing through L6000
 - the enemy pool per Enhancement level at the boundaries 0/1/1000/1001/3000/3001/5000/5001, Spiral never in the pool, the engine honouring the pool, veteran traits, and finite HP at stage 24's last wave
-- the Spiral Boss being bigger than the largest normal mob (any size tier), slower and tankier, and its reward going into the banked coins
+- the Spiral Boss being bigger than the largest normal mob (any size tier), slower and tankier, and its reward going into the banked Bounty
 - stages: table shape, Stage 2 unlocking after clearing 500, Stage 1 completing at 10,000, milestones paid once along the way, stage multipliers
 - save migration v1 → v2, v2 → v3 (old six workshop stats into the new tabs), v3 → v4 (Shield renames, clamping to new max levels), clamp-on-load and v1 → current
 - Workshop tabs: exactly the listed upgrades per tab (LEDGER exactly 9), no retired labels, cost curves monotonic and finite to max level, caps
-- permanent + in-run levels stacking, gates and max level in-run, permanent coin purchases
+- permanent + in-run levels stacking, gates and max level in-run, permanent Bounty purchases
 - Free Assault/Shield/Ledger chance applied (and only to its own tab)
 - Enemy Degrade lowering the stat wave (and HP) while rewards stay at the current wave
-- Bounty in the coin pipeline and Tribute in the cash pipeline
+- Bounty Gain in the Bounty pipeline and Tribute in the cash pipeline
 - Last Stand (0 at L0, ~30% at max, leaves 1% HP), the Fortification absorbing damage before the tower, Plating floor and Counterfire, Max Recovery capping Recovery
 - Assault max levels and caps (Damage 10,000, Attack Speed 1000 = 40/s, Crit Chance 90 = 90%, Crit Factor 175, Range 90 = 2.4, Multishot 110, Rapid Fire / Bounce / Rend 60, Super Crit 95), exact cost curves below the softening thresholds, several shots per step at 40/s
 - Hull Integrity (12 at L0, slow middle, steeper past L7000), Core Repair (= 1% of Hull Integrity at the same level, scaled by research, capped at 2.8% of max HP/s in stats and in the engine) and Plating (~2.15e7 at L6000) curves: monotonic, finite to L10,000, finite costs
@@ -341,7 +341,7 @@ Before each cap bump, re-check the cost curve (`Enhancement.cost`) against the c
 - boss reward scaling
 - 20 shapes with no forbidden ones, combo counts (≥ 2,000 base, ≥ 5,000 with extras) and tier ranking
 - cost curves
-- coin-multiplier stacking (all packs = 360x, plus boost × research × enhancement) and rewarded-boost stacking up to 2 h
+- Bounty-multiplier stacking (all packs = 360x, plus boost × research × enhancement) and rewarded-boost stacking up to 2 h
 - research timers on a fake clock, plus gates, slots and bypass
 - Light Speed conversion into fire rate and instant hits
 - the debug gate: closed when `!DEBUG`, and the secret-gesture timing

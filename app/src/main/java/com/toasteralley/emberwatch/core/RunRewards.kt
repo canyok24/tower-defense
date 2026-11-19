@@ -1,6 +1,6 @@
 package com.toasteralley.emberwatch.core
 
-/** Meta rewards applied when a run ends (coins are banked live by the engine host). */
+/** Meta rewards applied when a run ends (bounty are banked live by the engine host). */
 object RunRewards {
     /**
      * Updates the global best wave (used by menu / research gates) and the stage's

@@ -8,7 +8,7 @@ import kotlin.math.pow
 // =====================================================================  Enhancement
 /**
  * Enhancement window: one global multiplier applied on top of every other
- * window (workshop stats, perks, ultimates, coin income).
+ * window (workshop stats, perks, ultimates, bounty income).
  *
  * Formula (L = level):
  *   base(L) = 1 + 0.1*L                    for L <= 10   (1.1, 1.2 ... 2.0 at L10)
@@ -39,7 +39,7 @@ object Enhancement {
     fun multiplier(level: Int): Double = base(level) * milestoneBonus(level)
 
     /**
-     * Coins to buy level [level] + 1. Steep but finite:
+     * Bounty to buy level [level] + 1. Steep but finite:
      *   L <  100: 25,000 x 1.09^L                 (L99 ~ 1.27e8)
      *   L >= 100: cost(100) x 1.035^(L-100)       (L500 ~ 1.3e14, L999 ~ 3.6e21)
      * Beyond the current cap the 1.035 growth continues (L5000 ~ 4e81), still a finite Double.
@@ -95,15 +95,15 @@ object Gates {
     fun open(requiredWave: Int, save: SaveData, bypass: Boolean) = bypass || save.bestWave >= requiredWave
 }
 
-// =====================================================================  Coin multipliers
-object CoinMultipliers {
+// =====================================================================  Bounty multipliers
+object BountyMultipliers {
     const val REWARDED_FACTOR = 1.5
     const val REWARDED_CHUNK_MS = 20L * 60 * 1000
     const val REWARDED_MAX_MS = 2L * 60 * 60 * 1000
 
     /** Product multipliers from owned packs, stacked multiplicatively. */
     fun packs(owned: Set<String>): Double =
-        Products.ALL.filter { it.id in owned }.fold(1.0) { acc, p -> acc * p.coinMultiplier }
+        Products.ALL.filter { it.id in owned }.fold(1.0) { acc, p -> acc * p.bountyMultiplier }
 
     fun boostActive(save: SaveData, nowMs: Long) = save.boostUntilMs > nowMs
 
@@ -116,16 +116,16 @@ object CoinMultipliers {
     fun canAddChunk(save: SaveData, nowMs: Long) = save.boostUntilMs - nowMs <= REWARDED_MAX_MS - 60_000
 
     /**
-     * Everything that multiplies coin income:
+     * Everything that multiplies bounty income:
      * packs x rewarded x research x enhancement x selected-stage multiplier x stage milestone bonuses.
      */
     fun total(save: SaveData, owned: Set<String>, nowMs: Long): Double =
         packs(owned) *
             (if (boostActive(save, nowMs)) REWARDED_FACTOR else 1.0) *
-            ResearchProject.COIN_BONUS.effect(save.level(ResearchProject.COIN_BONUS)) *
+            ResearchProject.BOUNTY_BONUS.effect(save.level(ResearchProject.BOUNTY_BONUS)) *
             Enhancement.multiplier(save.enhancement) *
-            StageDefinitions.get(save.selectedStage).coinMult *
-            Stages.coinBonus(save)
+            StageDefinitions.get(save.selectedStage).bountyMult *
+            Stages.bountyBonus(save)
 }
 
 // =====================================================================  Number format

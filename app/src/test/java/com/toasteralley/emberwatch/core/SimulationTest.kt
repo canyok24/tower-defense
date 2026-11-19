@@ -16,12 +16,12 @@ class SimulationTest {
         return e
     }
 
-    @Test fun freshTowerFallsEventuallyAndEarnsCoins() {
+    @Test fun freshTowerFallsEventuallyAndEarnsBounty() {
         val e = run(SaveData(), buy = true)
-        println("fresh tower: wave ${e.wave}, coins ${e.runCoins}, kills ${e.kills}")
+        println("fresh tower: wave ${e.wave}, bounty ${e.runBounty}, kills ${e.kills}")
         assertTrue(e.gameOver)
         assertTrue(e.wave in 3..40)
-        assertTrue(e.runCoins > 20)
+        assertTrue(e.runBounty > 20)
     }
 
     @Test fun upgradedTowerGoesFurther() {
@@ -32,7 +32,7 @@ class SimulationTest {
             research[ResearchProject.LIGHT_SPEED_SHOTS.name] = 1
         }
         val e = run(s, buy = true)
-        println("upgraded tower: wave ${e.wave} vs fresh $fresh, coins ${e.runCoins}, diamonds ${e.runDiamonds}")
+        println("upgraded tower: wave ${e.wave} vs fresh $fresh, bounty ${e.runBounty}, diamonds ${e.runDiamonds}")
         assertTrue(e.wave > fresh)
     }
 

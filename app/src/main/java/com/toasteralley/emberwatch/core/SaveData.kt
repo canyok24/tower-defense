@@ -10,7 +10,7 @@ data class ActiveResearch(val project: ResearchProject, val targetLevel: Int, va
  */
 class SaveData {
     var version: Int = CURRENT_VERSION
-    var coins: Double = 0.0
+    var bounty: Double = 0.0
     var diamonds: Long = 0
     var cores: Long = 0
     var bestWave: Int = 0
@@ -29,7 +29,7 @@ class SaveData {
     var enhancement: Int = 0
     val research: MutableMap<String, Int> = mutableMapOf()
     val activeResearch: MutableList<ActiveResearch> = mutableListOf()
-    /** Rewarded-ad 1.5x coin boost runs until this wall-clock time. */
+    /** Rewarded-ad 1.5x bounty boost runs until this wall-clock time. */
     var boostUntilMs: Long = 0
     var runsSinceInterstitial: Int = 0
     var soundOn: Boolean = true
@@ -49,6 +49,6 @@ class SaveData {
          * v1: 10 difficulty tiers. v2: 24 stages with per-stage best wave + milestone rewards.
          * v3: Workshop split into ASSAULT / SHIELD / LEDGER (old six stats renamed).
          */
-        const val CURRENT_VERSION = 4  // v4: Shield upgrades renamed (Hull Integrity, Barrier, ...)
+        const val CURRENT_VERSION = 5  // v4: Shield renames; v5: coins -> Bounty, Ledger Bounty -> Bounty Gain
     }
 }

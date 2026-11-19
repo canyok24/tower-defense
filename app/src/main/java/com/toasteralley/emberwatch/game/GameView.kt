@@ -300,7 +300,7 @@ class GameView(context: Context, val engine: GameEngine) : SurfaceView(context),
         text.color = Palette.TEXT; text.textSize = 18 * density; text.isFakeBoldText = true
         c.drawText("WAVE ${e.wave}  S${e.stage}", waveLabel.left, hud.top + 24 * density, text)
         text.isFakeBoldText = false; text.textSize = 12 * density; text.color = Palette.TEXT_DIM
-        c.drawText("Coins ${NumberFormat.compact(e.runCoins)}  Cash ${NumberFormat.compact(e.cash)}", waveLabel.left, hud.top + 44 * density, text)
+        c.drawText("Bounty ${NumberFormat.compact(e.runBounty)}  Cash ${NumberFormat.compact(e.cash)}", waveLabel.left, hud.top + 44 * density, text)
         // health bar
         val hbL = waveLabel.left; val hbR = speedBtn.left - 10 * density; val hbT = hud.bottom - 10 * density
         fill.color = Palette.BG; c.drawRect(hbL, hbT, hbR, hbT + 5 * density, fill)
@@ -373,7 +373,7 @@ class GameView(context: Context, val engine: GameEngine) : SurfaceView(context),
         text.textAlign = Paint.Align.CENTER; text.color = Palette.CORAL; text.textSize = 30 * density; text.isFakeBoldText = true
         c.drawText(title, w / 2, h * 0.32f, text); text.isFakeBoldText = false
         text.color = Palette.TEXT; text.textSize = 16 * density
-        val lines = listOf("Wave ${e.wave}   Kills ${e.kills}", "Coins +${NumberFormat.compact(e.runCoins)}",
+        val lines = listOf("Wave ${e.wave}   Kills ${e.kills}", "Bounty +${NumberFormat.compact(e.runBounty)}",
             "Diamonds +${e.runDiamonds}   Cores +${e.runCores}")
         lines.forEachIndexed { i, s -> c.drawText(s, w / 2, h * 0.40f + i * 26 * density, text) }
         text.textAlign = Paint.Align.LEFT

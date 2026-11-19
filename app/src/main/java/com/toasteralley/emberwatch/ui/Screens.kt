@@ -4,7 +4,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.lifecycleScope
 import com.toasteralley.emberwatch.BuildConfig
 import com.toasteralley.emberwatch.ads.AdManager
-import com.toasteralley.emberwatch.core.CoinMultipliers
+import com.toasteralley.emberwatch.core.BountyMultipliers
 import com.toasteralley.emberwatch.core.DiamondPerk
 import com.toasteralley.emberwatch.core.EnemyPool
 import com.toasteralley.emberwatch.core.Enhancement
@@ -24,7 +24,7 @@ import kotlinx.coroutines.launch
 private fun c(v: Double) = NumberFormat.compact(v)
 
 /**
- * 1. Workshop: three tabs (ASSAULT / SHIELD / LEDGER). Coins buy permanent levels
+ * 1. Workshop: three tabs (ASSAULT / SHIELD / LEDGER). Bounty buy permanent levels
  * here; the in-run panel sells temporary levels of the same upgrades for Cash.
  */
 class WorkshopActivity : ListScreenActivity() {
@@ -41,15 +41,15 @@ class WorkshopActivity : ListScreenActivity() {
         note(when (tab) {
             WorkshopTab.ASSAULT -> "DMG ${c(s.damage)} · ${"%.2f".format(s.fireRate)}/s · Crit ${"%.1f".format(s.critChance * 100)}% x${"%.2f".format(s.critFactor)} · Range ${"%.2f".format(s.range)}"
             WorkshopTab.SHIELD -> "Hull ${c(s.maxHealth)} · Repair ${c(s.effectiveRegen())}/s · Barrier ${"%.1f".format(s.defense * 100)}% · Plating -${c(s.defenseAbs)} · Fortification ${c(s.wallMaxHp)}"
-            WorkshopTab.LEDGER -> "Coins x${"%.2f".format(s.bounty)} · Cash x${"%.2f".format(s.tribute)} · Interest ${"%.1f".format(s.interest * 100)}%"
-        } + "\nPermanent levels (Coins). In runs, the same upgrades can be raised temporarily with Cash.")
+            WorkshopTab.LEDGER -> "Bounty x${"%.2f".format(s.bountyGain)} · Cash x${"%.2f".format(s.tribute)} · Interest ${"%.1f".format(s.interest * 100)}%"
+        } + "\nPermanent levels (Bounty). In runs, the same upgrades can be raised temporarily with Cash.")
         for (u in Upgrade.ofTab(tab)) {
             val lvl = save.level(u)
             if (!Workshop.gateOpen(u, save, app.bypassGates)) { addRow(u.label, "Locked: reach wave ${u.gateWave}", null); continue }
             val maxed = lvl >= u.maxLevel
-            val cost = u.coinCost(lvl)
+            val cost = u.bountyCost(lvl)
             addRow("${u.label}  Lv $lvl/${u.maxLevel}", "${u.description}\n${u.format(lvl)} → ${if (maxed) "max" else u.format(lvl + 1)}",
-                if (maxed) "MAX" else "${c(cost)} coins", Workshop.canBuy(u, save, app.bypassGates)) {
+                if (maxed) "MAX" else "${c(cost)} Bounty", Workshop.canBuy(u, save, app.bypassGates)) {
                 Workshop.buy(u, save, app.bypassGates)
             }
         }
@@ -99,7 +99,7 @@ class EnhancementActivity : ListScreenActivity() {
     override fun buildRows() {
         if (!Gates.open(Gates.ENHANCEMENT_WAVE, save, app.bypassGates)) { note("Locked: reach wave ${Gates.ENHANCEMENT_WAVE}."); return }
         val lvl = save.enhancement
-        note("Multiplies health, damage, crit bonuses, ultimate damage and all coin income. " +
+        note("Multiplies health, damage, crit bonuses, ultimate damage and all Bounty income. " +
             "Milestone bonus (+5%, compounding) every ${Enhancement.MILESTONE_EVERY} levels. Current cap: ${Enhancement.ENHANCEMENT_CAP}.")
         val maxed = lvl >= Enhancement.ENHANCEMENT_CAP
         val cost = Enhancement.cost(lvl)
@@ -113,8 +113,8 @@ class EnhancementActivity : ListScreenActivity() {
         addRow("Level $lvl / ${Enhancement.ENHANCEMENT_CAP}",
             "x${"%.2f".format(Enhancement.multiplier(lvl))} → ${if (maxed) "cap reached" else "x${"%.2f".format(Enhancement.multiplier(lvl + 1))}"}" +
                 (if (!maxed && (lvl + 1) % Enhancement.MILESTONE_EVERY == 0) "  ★ milestone" else ""),
-            if (maxed) "CAP" else "${c(cost)} coins", !maxed && save.coins >= cost) {
-            if (save.coins >= cost) { save.coins -= cost; save.enhancement = lvl + 1 }
+            if (maxed) "CAP" else "${c(cost)} Bounty", !maxed && save.bounty >= cost) {
+            if (save.bounty >= cost) { save.bounty -= cost; save.enhancement = lvl + 1 }
         }
         section("NEXT MILESTONES")
         var m = (lvl / Enhancement.MILESTONE_EVERY + 1) * Enhancement.MILESTONE_EVERY
@@ -140,7 +140,7 @@ class ResearchActivity : ListScreenActivity() {
             val maxed = lvl >= p.maxLevel
             val check = bay.check(p, bypass)
             val desc = p.description + if (maxed) "\nComplete" else
-                "\n${c(p.coinCost(lvl))} coins + ${p.coreCost(lvl)} cores · ${NumberFormat.duration(p.durationMs(lvl))}"
+                "\n${c(p.bountyCost(lvl))} Bounty + ${p.coreCost(lvl)} cores · ${NumberFormat.duration(p.durationMs(lvl))}"
             addRow("${p.label}  Lv $lvl/${p.maxLevel}", desc,
                 when { maxed -> "DONE"; check is ResearchBay.StartResult.Blocked -> check.reason; else -> "Research" },
                 check == ResearchBay.StartResult.Ok) { bay.start(p, bypass) }
@@ -163,21 +163,21 @@ class StoreActivity : ListScreenActivity() {
         val owned = app.owned
         val now = System.currentTimeMillis()
         note("All packs are permanent and stack multiplicatively with each other and with research, enhancement and boosts. " +
-            "Current pack multiplier: x${"%.1f".format(CoinMultipliers.packs(owned))} · total coin multiplier x${c(app.displayCoinMultiplier(now))}")
+            "Current pack multiplier: x${"%.1f".format(BountyMultipliers.packs(owned))} · total Bounty multiplier x${c(app.displayBountyMultiplier(now))}")
         for (p in Products.ALL) {
             val has = p.id in owned
             val price = app.billing.priceOf(p.id)
-            addRow(p.title, "x${p.coinMultiplier} coins forever" + (if (p.removesAds) " · removes banner & interstitial ads" else "") +
+            addRow(p.title, "x${p.bountyMultiplier} Bounty forever" + (if (p.removesAds) " · removes banner & interstitial ads" else "") +
                 (if (price == null && !has) "\nUnavailable until published on Google Play" else ""),
                 if (has) "Owned" else price ?: p.listPrice, !has) { app.billing.launchPurchase(this, p.id) }
         }
         section("BOOST")
         val left = (save.boostUntilMs - now).coerceAtLeast(0)
-        addRow("Watch an ad: 1.5x coins", "Adds 20 minutes (stacks up to 2 hours). " +
+        addRow("Watch an ad: 1.5x Bounty", "Adds 20 minutes (stacks up to 2 hours). " +
             if (left > 0) "Active: ${NumberFormat.duration(left)} left" else "Inactive",
-            "Watch", CoinMultipliers.canAddChunk(save, now)) {
+            "Watch", BountyMultipliers.canAddChunk(save, now)) {
             AdManager.showRewarded(this, onReward = {
-                CoinMultipliers.addRewardedChunk(save, System.currentTimeMillis()); app.persist(); build()
+                BountyMultipliers.addRewardedChunk(save, System.currentTimeMillis()); app.persist(); build()
             }, onUnavailable = { toast("Ad not ready yet, try again shortly") })
         }
         section("PURCHASES")
@@ -190,7 +190,7 @@ class SettingsActivity : ListScreenActivity() {
     override val screenTitle = "Settings"
     override fun buildRows() {
         addRow("Restore purchases", "Re-sync owned packs from Google Play", "Restore") { app.billing.restorePurchasesAsync(true) }
-        addRow("Reset progress", "Wipes coins, upgrades, research and waves. Purchases are never wiped.", "Reset") {
+        addRow("Reset progress", "Wipes Bounty, upgrades, research and waves. Purchases are never wiped.", "Reset") {
             AlertDialog.Builder(this).setTitle("Reset all progress?")
                 .setMessage("Your store purchases stay owned.")
                 .setPositiveButton("Reset") { _, _ -> resetProgress(); app.persist(); build() }
@@ -200,7 +200,7 @@ class SettingsActivity : ListScreenActivity() {
     }
     private fun resetProgress() {
         val fresh = SaveData()
-        save.coins = fresh.coins; save.diamonds = 0; save.cores = 0; save.bestWave = 0; save.totalRuns = 0
+        save.bounty = fresh.bounty; save.diamonds = 0; save.cores = 0; save.bestWave = 0; save.totalRuns = 0
         save.selectedStage = 1; save.legacyUnlockedStage = 1
         save.stageBestWave.clear(); save.stageMilestonesClaimed.clear()
         save.workshop.clear(); save.perks.clear(); save.ultimates.clear(); save.research.clear()

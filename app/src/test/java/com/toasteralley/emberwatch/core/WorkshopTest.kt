@@ -14,7 +14,7 @@ class WorkshopTest {
         assertEquals(listOf("Hull Integrity", "Core Repair", "Barrier", "Plating", "Counterfire", "Drain", "Repulse",
             "Satellites", "Pulse", "Last Stand", "Fortification", "Reconstruction", "Charges"), names(WorkshopTab.SHIELD))
         assertEquals(9, Upgrade.ofTab(WorkshopTab.LEDGER).size)
-        assertEquals(listOf("Bounty", "Tribute", "Interest Per Wave", "Free Assault", "Free Shield", "Free Ledger",
+        assertEquals(listOf("Bounty Gain", "Tribute", "Interest Per Wave", "Free Assault", "Free Shield", "Free Ledger",
             "Enemy Degrade Chance", "Recovery Amount", "Max Recovery"), names(WorkshopTab.LEDGER))
         assertEquals(listOf("ASSAULT", "SHIELD", "LEDGER"), WorkshopTab.entries.map { it.label })
         val banned = listOf("Utility", "Defense tab", "Coins Per Kill", "Cash Bonus", "Enemy Level Skip",
@@ -31,6 +31,9 @@ class WorkshopTest {
             assertFalse(u.label == "Health")
         }
         for (r in ResearchProject.entries) for (b in banned + "Wall Plating") assertFalse(r.label.has(b))
+        // currency is "Bounty" everywhere: no user-facing "coin"
+        for (u in Upgrade.entries) for (t in listOf(u.label, u.description, u.format(1))) assertFalse(t, t.has("coin") || t.has("coins"))
+        for (r in ResearchProject.entries) assertFalse(r.label.has("coin") || r.description.has("coin") || r.description.has("coins"))
     }
 
     @Test fun percentagesAreCapped() {
@@ -63,10 +66,10 @@ class WorkshopTest {
         assertEquals(0.5, Upgrade.BOUNCE_SHOT.value(60), 1e-9); assertEquals(3.0, Upgrade.BOUNCE_SHOT.secondary(60), 0.0)
         assertEquals(0.4, Upgrade.SUPER_CRIT.value(95), 1e-9); assertTrue(Upgrade.SUPER_CRIT.value(94) < 0.4)
         assertEquals(0.2, Upgrade.REND_ARMOR.value(60), 1e-9); assertEquals(2.0, Upgrade.REND_ARMOR.secondary(60), 1e-9)
-        // Damage keeps 25 x 1.14^L coins (15 x 1.16^L cash) exactly where specified, finite to 10,000
-        for (l in listOf(0, 100, 1000, 5000)) assertEquals(kotlin.math.floor(25 * Math.pow(1.14, l.toDouble())), Upgrade.DAMAGE.coinCost(l), 0.0)
+        // Damage keeps 25 x 1.14^L bounty (15 x 1.16^L cash) exactly where specified, finite to 10,000
+        for (l in listOf(0, 100, 1000, 5000)) assertEquals(kotlin.math.floor(25 * Math.pow(1.14, l.toDouble())), Upgrade.DAMAGE.bountyCost(l), 0.0)
         for (l in listOf(0, 100, 2500)) assertEquals(kotlin.math.floor(15 * Math.pow(1.16, l.toDouble())), Upgrade.DAMAGE.cashCost(l), 0.0)
-        assertTrue(Upgrade.DAMAGE.coinCost(10_000).isFinite() && Upgrade.DAMAGE.cashCost(10_000).isFinite())
+        assertTrue(Upgrade.DAMAGE.bountyCost(10_000).isFinite() && Upgrade.DAMAGE.cashCost(10_000).isFinite())
         assertTrue(Upgrade.DAMAGE.value(10_000).isFinite())
     }
 
@@ -93,8 +96,8 @@ class WorkshopTest {
         // relative gain shrinks through the middle, then accelerates past L5000
         fun rel(l: Int) = u.value(l + 1) / u.value(l)
         assertTrue(rel(100) > rel(1000)); assertTrue(rel(1000) > rel(6900)); assertTrue(rel(8000) > rel(5000)); assertTrue(rel(9500) > rel(8000))
-        for (l in 0..u.maxLevel step 50) assertTrue(u.coinCost(l).isFinite() && u.cashCost(l).isFinite())
-        assertEquals(kotlin.math.floor(20 * Math.pow(1.13, 5000.0)), u.coinCost(5000), 0.0)
+        for (l in 0..u.maxLevel step 50) assertTrue(u.bountyCost(l).isFinite() && u.cashCost(l).isFinite())
+        assertEquals(kotlin.math.floor(20 * Math.pow(1.13, 5000.0)), u.bountyCost(5000), 0.0)
         // Hull Integrity Research still composes multiplicatively
         val s = SaveData().apply { workshop[u.name] = 100; research[ResearchProject.LAB_HEALTH.name] = 5 }
         assertEquals(u.value(100) * ResearchProject.LAB_HEALTH.effect(5), TowerStats.resolve(s).maxHealth, 1e-6)
@@ -108,8 +111,8 @@ class WorkshopTest {
             assertEquals(0.01 * Upgrade.HULL_INTEGRITY.value(l), u.value(l), u.value(l) * 1e-12)
         var prev = -1.0
         for (l in 0..u.maxLevel) { val v = u.value(l); assertTrue(v > prev && v.isFinite()); prev = v }
-        for (l in 0..u.maxLevel step 50) assertTrue(u.coinCost(l).isFinite() && u.cashCost(l).isFinite())
-        assertEquals(kotlin.math.floor(30 * Math.pow(1.15, 4500.0)), u.coinCost(4500), 0.0)
+        for (l in 0..u.maxLevel step 50) assertTrue(u.bountyCost(l).isFinite() && u.cashCost(l).isFinite())
+        assertEquals(kotlin.math.floor(30 * Math.pow(1.15, 4500.0)), u.bountyCost(4500), 0.0)
         assertTrue(u.format(1000).contains("/s") && u.format(1000).endsWith("(max 2.8%/s)"))
         // research / perk / enhancement scale regen exactly like max health
         val base = SaveData().apply { workshop[u.name] = 200; workshop[Upgrade.HULL_INTEGRITY.name] = 200 }
@@ -145,13 +148,13 @@ class WorkshopTest {
         for (l in 0..u.maxLevel) { val v = u.value(l); assertTrue("L$l", v > prev && v.isFinite()); prev = v }
         fun rel(l: Int) = u.value(l + 1) / u.value(l)
         assertTrue(rel(100) > rel(1000)); assertTrue(rel(1000) > rel(4900)); assertTrue(rel(8000) > rel(5000))
-        for (l in 0..u.maxLevel step 50) assertTrue(u.coinCost(l).isFinite() && u.cashCost(l).isFinite())
-        assertEquals(kotlin.math.floor(35 * Math.pow(1.15, 4500.0)), u.coinCost(4500), 0.0)
+        for (l in 0..u.maxLevel step 50) assertTrue(u.bountyCost(l).isFinite() && u.cashCost(l).isFinite())
+        assertEquals(kotlin.math.floor(35 * Math.pow(1.15, 4500.0)), u.bountyCost(4500), 0.0)
         assertEquals(kotlin.math.floor(25 * Math.pow(1.18, 2500.0)), u.cashCost(2500), 0.0)
     }
 
     @Test fun permanentAndRunLevelsStack() {
-        val s = SaveData().apply { coins = 1e6; workshop[Upgrade.DAMAGE.name] = 10 }
+        val s = SaveData().apply { bounty = 1e6; workshop[Upgrade.DAMAGE.name] = 10 }
         val e = GameEngine(s, emptyMap(), 1.0, seed = 1)
         val before = e.stats.damage
         assertEquals(TowerStats.resolve(s).damage, before, 1e-9)
@@ -165,10 +168,10 @@ class WorkshopTest {
         assertEquals(BuyResult.LOCKED, e.buyRunUpgrade(Upgrade.SUPER_CRIT))
         s.workshop[Upgrade.RANGE.name] = Upgrade.RANGE.maxLevel
         assertEquals(BuyResult.MAXED, GameEngine(s, emptyMap(), 1.0).buyRunUpgrade(Upgrade.RANGE))
-        // permanent purchase with coins
+        // permanent purchase with bounty
         assertTrue(Workshop.buy(Upgrade.HULL_INTEGRITY, s, false))
         assertEquals(1, s.level(Upgrade.HULL_INTEGRITY))
-        assertTrue(s.coins < 1e6)
+        assertTrue(s.bounty < 1e6)
     }
 
     @Test fun freeUpgradeChanceApplied() {
@@ -197,18 +200,18 @@ class WorkshopTest {
         val low = degraded.first()
         assertTrue(low.maxHp < full.maxHp)
         assertEquals(WaveRules.hpScale(low.statWave) * WaveRules.veteran(MobProfiles.of(MobShape.ELLIPSE), low.statWave).hp, low.maxHp, low.maxHp * 1e-9)
-        assertEquals(full.coins, low.coins, 1e-9)                  // rewards stay at the current wave
+        assertEquals(full.bounty, low.bounty, 1e-9)                  // rewards stay at the current wave
         val none = GameEngine(SaveData(), emptyMap(), 1.0, startWave = 100, seed = 3)
         assertTrue((1..200).all { none.spawnMob(MobShape.ELLIPSE).statWave == 100 })
     }
 
     @Test fun bountyAndTributeInPipelines() {
-        val s = SaveData().apply { workshop[Upgrade.BOUNTY.name] = 10; workshop[Upgrade.TRIBUTE.name] = 20 }
-        val e = GameEngine(s, emptyMap(), coinMultiplier = 3.0, seed = 1)
+        val s = SaveData().apply { workshop[Upgrade.BOUNTY_GAIN.name] = 10; workshop[Upgrade.TRIBUTE.name] = 20 }
+        val e = GameEngine(s, emptyMap(), bountyMultiplier = 3.0, seed = 1)
         val m = e.spawnMob(MobShape.ELLIPSE, 0.5f, 0.5f)
         val cash0 = e.cash
         e.hit(m, 1e12)
-        assertEquals(m.coins * 3.0 * 1.3, e.runCoins, 1e-9)
+        assertEquals(m.bounty * 3.0 * 1.3, e.runBounty, 1e-9)
         assertEquals(m.cash * 1.6, e.cash - cash0, 1e-9)
     }
 
